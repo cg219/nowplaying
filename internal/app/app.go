@@ -23,6 +23,14 @@ type tokenResp struct {
     Token string `json:"token"`
 }
 
+type sessionResp struct {
+    Session struct {
+        Name string `json:"name"`
+        Key string `json:"key"`
+        Subscribers int `json:"subscribers"`
+    } `json:"session"`
+}
+
 type apiParam struct {
     Name string
     Value string
@@ -33,7 +41,8 @@ type authCfg struct {
     secret string
     client *http.Client
     ctx context.Context
-    token string
+    session *sessionResp
+    listenInterval time.Ticker
 }
 
 func makeSignature (secret string, list []apiParam) string {
@@ -118,16 +127,68 @@ func Auth(cfg *authCfg) error {
 
     defer resp2.Body.Close()
     
-    var tst map[string]interface{}
+    var session sessionResp
 
-    err = json.NewDecoder(resp2.Body).Decode(&tst)
+    err = json.NewDecoder(resp2.Body).Decode(&session)
 
     if err != nil {
         return err
     }
 
-    log.Print(tst)
+    cfg.session = &sessionResp{ Session: session.Session }
+
+    log.Print(session)
     return nil
+}
+
+
+func Listen(cfg *authCfg) {
+    done := make(chan bool)
+
+    for {
+        select {
+        case <- done:
+            return
+        case <- cfg.listenInterval.C:
+            checkCurrentTrack(cfg)
+        }
+    }
+}
+
+func checkCurrentTrack(cfg *authCfg) error {
+    req, err := http.NewRequestWithContext(cfg.ctx, "GET", cfg.makeApiUrl("user.getrecenttracks", []apiParam{
+        { Name: "sk", Value: cfg.session.Session.Key },
+        { Name: "limit", Value: "1" },
+        { Name: "user", Value: cfg.session.Session.Name },
+    }), nil)
+
+    if err != nil {
+        return err
+    }
+
+    resp, err := cfg.client.Do(req)
+
+    if err != nil {
+        return err
+    }
+
+    defer resp.Body.Close()
+
+    // TODO:
+    // - Create Struct for Track data
+
+    var tracklist map[string]interface{}
+
+    err = json.NewDecoder(resp.Body).Decode(&tracklist)
+
+    if err != nil {
+        return err
+    }
+
+    log.Print(tracklist)
+
+    return nil
+
 }
 
 func Run(config Config) error {
@@ -137,12 +198,16 @@ func Run(config Config) error {
         client: &http.Client{
             Timeout: time.Second * 60,
         },
+        session: nil,
+        listenInterval: *time.NewTicker(15 * time.Second),
         ctx: context.Background(),
     }
 
     if err := Auth(cfg); err != nil {
         return err
     }
+
+    Listen(cfg)
 
     return nil
 }
