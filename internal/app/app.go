@@ -141,7 +141,6 @@ func Auth(cfg *authCfg) error {
     return nil
 }
 
-
 func Listen(cfg *authCfg) {
     done := make(chan bool)
 
@@ -191,6 +190,9 @@ func checkCurrentTrack(cfg *authCfg) error {
 
 }
 
+// TODO:
+// - Lookup track on youtube for a link
+// - Setup ai to verify the youtube link
 func Run(config Config) error {
     cfg := &authCfg{
         key: config.LastFM.Key, 
