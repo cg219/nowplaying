@@ -113,8 +113,10 @@ type SpotifyPlayingResp struct {
 }
 
 type SpotifyPlayingErrorResp struct {
-    Status json.Number `json:"status"`
-    Message string `json:"message"`
+    Error struct {
+        Status json.Number `json:"status"`
+        Message string `json:"message"`
+    } `json:"error"`
 }
 
 type apiParam struct {
@@ -158,7 +160,7 @@ func (cfg *AuthCfg) ListenToSpotify() {
         case <- done:
             return
         case <- cfg.listenInterval.C:
-            err := cfg.CheckCurrentSpotifyTrack()
+            err := cfg.CheckCurrentSpotifyTrack(false)
 
             if err != nil {
                 log.Printf("Oops: %s\n", err)
@@ -175,7 +177,7 @@ func (cfg *AuthCfg) Listen() {
         case <- done:
             return
         case <- cfg.listenInterval.C:
-            err := cfg.CheckCurrentSpotifyTrack()
+            err := cfg.CheckCurrentSpotifyTrack(false)
 
             if err != nil {
                 log.Printf("Oops: %s\n", err)
@@ -400,7 +402,7 @@ func (cfg *AuthCfg) CheckCurrentLastFMTrack() error {
     return nil
 }
 
-func (cfg *AuthCfg) CheckCurrentSpotifyTrack() error {
+func (cfg *AuthCfg) CheckCurrentSpotifyTrack(skipError bool) error {
     // vals := url.Values{}
     // vals.Set("markets", "US")
 
@@ -423,6 +425,7 @@ func (cfg *AuthCfg) CheckCurrentSpotifyTrack() error {
         var data SpotifyPlayingResp
         err = json.NewDecoder(resp.Body).Decode(&data)
         if err != nil {
+            log.Println(err.Error())
             return err
         }
 
@@ -436,9 +439,10 @@ func (cfg *AuthCfg) CheckCurrentSpotifyTrack() error {
             }
         }
 
-        if data.Status == json.Number(401) {
+        if data.Error.Status == "401" && !skipError {
             log.Println("Refreshing Spotify Tokens")
             cfg.RefreshSpotifyTokens()
+            cfg.CheckCurrentSpotifyTrack(true)
         }
     }
 
