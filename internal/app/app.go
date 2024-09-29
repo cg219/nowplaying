@@ -334,13 +334,12 @@ func (cfg *AuthCfg) RefreshSpotifyTokens() error {
         return err
     }
     
-    cfg.database.SaveSpotifySession(cfg.ctx, database.SaveSpotifySessionParams{
+    cfg.database.UpdateSpotifyAccessToken(cfg.ctx, database.UpdateSpotifyAccessTokenParams{
         SpotifyAccessToken: sql.NullString{ String: data.AccessToken, Valid: true },
-        SpotifyRefreshToken: sql.NullString{ String: data.RefreshToken, Valid: true },
         Username: cfg.username,
     })
 
-    cfg.spotifySession = &Session{ AccessToken: data.AccessToken, RefreshToken: data.RefreshToken }
+    cfg.spotifySession.AccessToken = data.AccessToken
 
     return nil
 }

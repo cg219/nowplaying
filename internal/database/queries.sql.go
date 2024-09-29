@@ -91,3 +91,19 @@ func (q *Queries) SaveUser(ctx context.Context, username string) error {
 	_, err := q.db.ExecContext(ctx, saveUser, username)
 	return err
 }
+
+const updateSpotifyAccessToken = `-- name: UpdateSpotifyAccessToken :exec
+UPDATE users
+SET spotify_access_token = ?
+WHERE username = ?
+`
+
+type UpdateSpotifyAccessTokenParams struct {
+	SpotifyAccessToken sql.NullString
+	Username           string
+}
+
+func (q *Queries) UpdateSpotifyAccessToken(ctx context.Context, arg UpdateSpotifyAccessTokenParams) error {
+	_, err := q.db.ExecContext(ctx, updateSpotifyAccessToken, arg.SpotifyAccessToken, arg.Username)
+	return err
+}

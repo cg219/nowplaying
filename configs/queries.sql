@@ -20,6 +20,11 @@ SET spotify_access_token = ?,
     spotify_refresh_token = ?
 WHERE username = ?;
 
+-- name: UpdateSpotifyAccessToken :exec
+UPDATE users
+SET spotify_access_token = ?
+WHERE username = ?;
+
 -- name: SaveUser :exec
 INSERT INTO users(username)
 VALUES(?);
