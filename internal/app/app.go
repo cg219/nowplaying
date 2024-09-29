@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -430,7 +431,9 @@ func (cfg *AuthCfg) CheckCurrentSpotifyTrack() error {
         var data SpotifyPlayingErrorResp
         err = json.NewDecoder(resp.Body).Decode(&data)
         if err != nil {
-            return err
+            if err != io.EOF {
+                return err
+            }
         }
 
         if data.Status == json.Number(401) {
