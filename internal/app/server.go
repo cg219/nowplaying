@@ -30,5 +30,5 @@ func StartServer() error {
 
     addRoutes(srv)
 
-    return http.ListenAndServe(":3000", srv.mux)
+    return http.ListenAndServe(":3006", srv.mux)
 }
