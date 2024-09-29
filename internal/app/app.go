@@ -1,22 +1,25 @@
 package app
 
 import (
-    "context"
-    "crypto/md5"
-    "database/sql"
-    "encoding/json"
-    "fmt"
-    "log"
-    "net/http"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "sort"
-    "time"
+	"context"
+	"crypto/md5"
+	"database/sql"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
 
-    "github.com/cg219/nowplaying/internal/database"
-    "github.com/pressly/goose/v3"
-    "github.com/tursodatabase/go-libsql"
+	"github.com/cg219/nowplaying/internal/database"
+	"github.com/pressly/goose/v3"
+	"github.com/tursodatabase/go-libsql"
 )
 
 type Config struct {
@@ -46,11 +49,13 @@ type tokenResp struct {
 type Session struct {
     Name string `json:"name"`
     Key string `json:"key"`
+    AccessToken string
+    RefreshToken string
     Subscribers int `json:"subscribers"`
 }
 
-type sessionResp struct {
-    Session `json:"session"`
+type LastFMSessionResp struct {
+    Session Session `json:"session"`
 }
 
 type LastFMArtist struct {
@@ -88,20 +93,77 @@ type LastFMCurrentTrackResp struct {
     } `json:"recenttracks"`
 }
 
+type SpotifyTokenResp struct {
+    AccessToken string `json:"access_token"`
+    RefreshToken string `json:"refresh_token"`
+    Scope string `json:"scope"`
+}
+
+type SpotifyPlayingResp struct {
+    Timestamp json.Number `json:"timestamp"`
+    Progress json.Number `json:"progress_ms"`
+    Item struct {
+        Album struct {
+            Name string `json:"name"`
+        } `json:"album"`
+        Artist []struct{ Name string `json:"name"`} `json:"artists"`
+        Song string `json:"name"`
+    } `json:"item"`
+}
+
+type SpotifyPlayingErrorResp struct {
+    Status json.Number `json:"status"`
+    Message string `json:"message"`
+}
+
 type apiParam struct {
     Name string
     Value string
 }
 
 type AuthCfg struct {
-    key string
-    secret string
+    config Config
     username string
     client *http.Client
     ctx context.Context
-    session *Session
+    lastfmSession *Session
+    spotifySession *Session
     listenInterval time.Ticker
     database *database.Queries
+}
+
+func (cfg *AuthCfg) ListenToLastFM() {
+    done := make(chan bool)
+
+    for {
+        select {
+        case <- done:
+            return
+        case <- cfg.listenInterval.C:
+            err := cfg.CheckCurrentLastFMTrack()
+
+            if err != nil {
+                log.Printf("Oops: %s\n", err)
+            }
+        }
+    }
+}
+
+func (cfg *AuthCfg) ListenToSpotify() {
+    done := make(chan bool)
+
+    for {
+        select {
+        case <- done:
+            return
+        case <- cfg.listenInterval.C:
+            err := cfg.CheckCurrentSpotifyTrack()
+
+            if err != nil {
+                log.Printf("Oops: %s\n", err)
+            }
+        }
+    }
 }
 
 func (cfg *AuthCfg) Listen() {
@@ -112,7 +174,13 @@ func (cfg *AuthCfg) Listen() {
         case <- done:
             return
         case <- cfg.listenInterval.C:
-            err := cfg.CheckCurrentTrack()
+            err := cfg.CheckCurrentSpotifyTrack()
+
+            if err != nil {
+                log.Printf("Oops: %s\n", err)
+            }
+
+            err = cfg.CheckCurrentLastFMTrack()
 
             if err != nil {
                 log.Printf("Oops: %s\n", err)
@@ -121,7 +189,7 @@ func (cfg *AuthCfg) Listen() {
     }
 }
 
-func (cfg *AuthCfg) Auth() error {
+func (cfg *AuthCfg) AuthLastFM() error {
     authurl := "http://www.last.fm/api/auth/?api_key=%s&token=%s"
     respBody := tokenResp{}
     req, err := http.NewRequestWithContext(cfg.ctx, "GET", cfg.MakeApiUrl("auth.gettoken", nil), nil)
@@ -142,7 +210,7 @@ func (cfg *AuthCfg) Auth() error {
     }
 
     log.Print("Token: ", respBody.Token)
-    exec.Command("open", fmt.Sprintf(authurl, cfg.key, respBody.Token)).Run()
+    exec.Command("open", fmt.Sprintf(authurl, cfg.config.LastFM.Key, respBody.Token)).Run()
     fmt.Println("Hit Enter to Continue after authorization")
     fmt.Scanln()
 
@@ -158,7 +226,7 @@ func (cfg *AuthCfg) Auth() error {
 
     defer resp2.Body.Close()
 
-    var session sessionResp
+    var session LastFMSessionResp
     err = json.NewDecoder(resp2.Body).Decode(&session)
     if err != nil {
         return err
@@ -166,36 +234,149 @@ func (cfg *AuthCfg) Auth() error {
 
     cfg.database.SaveUser(cfg.ctx, cfg.username)
     cfg.database.SaveLastFMSession(cfg.ctx, database.SaveLastFMSessionParams{
-        LastfmSessionName: sql.NullString{ String: session.Name, Valid: true },
-        LastfmSessionKey: sql.NullString{ String: session.Key, Valid: true },
+        LastfmSessionName: sql.NullString{ String: session.Session.Name, Valid: true },
+        LastfmSessionKey: sql.NullString{ String: session.Session.Key, Valid: true },
         Username: cfg.username,
     })
 
-    cfg.session = &session.Session
+    cfg.lastfmSession = &session.Session
     log.Print(session.Session)
     return nil
 }
 
-func (cfg *AuthCfg) AuthWithDB() error {
+func (cfg *AuthCfg) AuthSpotify() error {
+    req, err := http.NewRequestWithContext(cfg.ctx, "GET", "https://accounts.spotify.com/authorize", nil)
+    if err != nil {
+        return err
+    }
+
+    vals := req.URL.Query()
+    vals.Add("response_type", "code")
+    vals.Add("client_id", cfg.config.Spotify.Id)
+    vals.Add("state", "something")
+    vals.Add("redirect_uri", cfg.config.Spotify.Redirect)
+    vals.Add("scope", "user-read-currently-playing user-read-playback-state")
+
+    req.URL.RawQuery = vals.Encode()
+
+    exec.Command("open", req.URL.String()).Run()
+
+    fmt.Println("Hit Enter to Continue after authorization")
+    fmt.Scanln()
+
+    return nil
+}
+
+
+func (cfg *AuthCfg) GetSpotifyTokens(code string) error {
+    vals := url.Values{}
+    vals.Set("grant_type", "authorization_code")
+    vals.Set("code", code)
+    vals.Set("redirect_uri", cfg.config.Spotify.Redirect)
+
+    req, err := http.NewRequestWithContext(cfg.ctx, "POST", "https://accounts.spotify.com/api/token", strings.NewReader(vals.Encode()))
+    if err != nil {
+        return err
+    }
+
+    req.Header.Add("Authorization", fmt.Sprintf("Basic %s", base64.RawStdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", cfg.config.Spotify.Id, cfg.config.Spotify.Secret)))))
+    req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+    resp, err := cfg.client.Do(req)
+    if err != nil {
+        return err
+    }
+
+    defer resp.Body.Close()
+
+    var data SpotifyTokenResp
+    err = json.NewDecoder(resp.Body).Decode(&data)
+    if err != nil {
+        return err
+    }
+    
+    cfg.database.SaveUser(cfg.ctx, cfg.username)
+    cfg.database.SaveSpotifySession(cfg.ctx, database.SaveSpotifySessionParams{
+        SpotifyAccessToken: sql.NullString{ String: data.AccessToken, Valid: true },
+        SpotifyRefreshToken: sql.NullString{ String: data.RefreshToken, Valid: true },
+        Username: cfg.username,
+    })
+    
+    return nil
+}
+
+func (cfg *AuthCfg) RefreshSpotifyTokens() error {
+    vals := url.Values{}
+    vals.Set("grant_type", "refresh_token")
+    vals.Set("refresh_token", cfg.spotifySession.RefreshToken)
+
+    req, err := http.NewRequestWithContext(cfg.ctx, "POST", "https://accounts.spotify.com/api/token", strings.NewReader(vals.Encode()))
+    if err != nil {
+        return err
+    }
+
+    req.Header.Add("Authorization", fmt.Sprintf("Basic %s", base64.RawStdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", cfg.config.Spotify.Id, cfg.config.Spotify.Secret)))))
+    req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+    resp, err := cfg.client.Do(req)
+    if err != nil {
+        return err
+    }
+
+    defer resp.Body.Close()
+
+    var data SpotifyTokenResp
+    err = json.NewDecoder(resp.Body).Decode(&data)
+    if err != nil {
+        return err
+    }
+    
+    cfg.database.SaveSpotifySession(cfg.ctx, database.SaveSpotifySessionParams{
+        SpotifyAccessToken: sql.NullString{ String: data.AccessToken, Valid: true },
+        SpotifyRefreshToken: sql.NullString{ String: data.RefreshToken, Valid: true },
+        Username: cfg.username,
+    })
+
+    cfg.spotifySession = &Session{ AccessToken: data.AccessToken, RefreshToken: data.RefreshToken }
+
+    return nil
+}
+
+func (cfg *AuthCfg) AuthLastFMWithDB() error {
     dbSession, err := cfg.database.GetLastFMSession(cfg.ctx, cfg.username)
     if err != nil {
         log.Printf("Oops: %s\n", err)
     }
 
     if !dbSession.LastfmSessionKey.Valid && !dbSession.LastfmSessionName.Valid {
-        cfg.Auth()
+        cfg.AuthLastFM()
         return nil
     }
 
-    cfg.session = &Session{ Name: dbSession.LastfmSessionName.String, Key: dbSession.LastfmSessionKey.String }
+    cfg.lastfmSession = &Session{ Name: dbSession.LastfmSessionName.String, Key: dbSession.LastfmSessionKey.String }
     return nil
 }
 
-func (cfg *AuthCfg) CheckCurrentTrack() error {
+func (cfg *AuthCfg) AuthSpotifyWithDB() error {
+    dbSession, err := cfg.database.GetSpotifySession(cfg.ctx, cfg.username)
+    if err != nil {
+        log.Printf("Oops: %s\n", err)
+    }
+
+    if !dbSession.SpotifyAccessToken.Valid && !dbSession.SpotifyRefreshToken.Valid {
+        cfg.AuthSpotify()
+        return nil
+    }
+
+    cfg.spotifySession = &Session{ AccessToken: dbSession.SpotifyAccessToken.String, RefreshToken: dbSession.SpotifyRefreshToken.String }
+    return nil
+}
+
+func (cfg *AuthCfg) CheckCurrentLastFMTrack() error {
     req, err := http.NewRequestWithContext(cfg.ctx, "GET", cfg.MakeApiUrl("user.getrecenttracks", []apiParam{
-        { Name: "sk", Value: cfg.session.Key },
+        { Name: "sk", Value: cfg.lastfmSession.Key },
         { Name: "limit", Value: "1" },
-        { Name: "user", Value: cfg.session.Name },
+        { Name: "user", Value: cfg.lastfmSession.Name },
     }), nil)
     if err != nil {
         return err
@@ -214,22 +395,65 @@ func (cfg *AuthCfg) CheckCurrentTrack() error {
         return err
     }
 
-    log.Print(tracklist.Recent.Tracks[0].Name)
+    log.Printf("LastFM: %s - %s\n",tracklist.Recent.Tracks[0].Artist.Name, tracklist.Recent.Tracks[0].Name)
+    return nil
+}
+
+func (cfg *AuthCfg) CheckCurrentSpotifyTrack() error {
+    // vals := url.Values{}
+    // vals.Set("markets", "US")
+
+    req, err := http.NewRequestWithContext(cfg.ctx, "GET", "https://api.spotify.com/v1/me/player/currently-playing", nil)
+    if err != nil {
+        return err
+    }
+
+    req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cfg.spotifySession.AccessToken))
+    req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+    resp, err := cfg.client.Do(req)
+    if err != nil {
+        return err
+    }
+
+    defer resp.Body.Close()
+
+    if resp.StatusCode == http.StatusOK {
+        var data SpotifyPlayingResp
+        err = json.NewDecoder(resp.Body).Decode(&data)
+        if err != nil {
+            return err
+        }
+
+        log.Printf("Spotify: %s - %s\n", data.Item.Artist[0].Name, data.Item.Song)
+    } else {
+        var data SpotifyPlayingErrorResp
+        err = json.NewDecoder(resp.Body).Decode(&data)
+        if err != nil {
+            return err
+        }
+
+        if data.Status == json.Number(401) {
+            log.Println("Refreshing Spotify Tokens")
+            cfg.RefreshSpotifyTokens()
+        }
+    }
+
     return nil
 }
 
 func (cfg *AuthCfg) MakeApiUrl(method string, list []apiParam) string {
     baseurl := "http://ws.audioscrobbler.com/2.0/?format=json&api_sig=%s%s"
     params := ""
-    list = append(list, apiParam{ Name: "api_key", Value: cfg.key })
+    list = append(list, apiParam{ Name: "api_key", Value: cfg.config.LastFM.Key })
     list = append(list, apiParam{ Name: "method", Value: method })
 
     for _, p := range(list) {
         params = fmt.Sprintf("%s&%s=%s", params, p.Name, p.Value)
     }
 
-    log.Printf(baseurl, makeSignature(cfg.secret, list), params)
-    return fmt.Sprintf(baseurl, makeSignature(cfg.secret, list), params)
+    log.Printf(baseurl, makeSignature(cfg.config.LastFM.Secret, list), params)
+    return fmt.Sprintf(baseurl, makeSignature(cfg.config.LastFM.Secret, list), params)
 }
 
 func makeSignature (secret string, list []apiParam) string {
@@ -255,14 +479,14 @@ func makeSignature (secret string, list []apiParam) string {
 // - Setup ai to verify the youtube link
 func Run(config Config) error {
     cfg := &AuthCfg{
-        key: config.LastFM.Key, 
-        secret: config.LastFM.Secret,
+        config: config,
         username: config.App.Name,
         client: &http.Client{
             Timeout: time.Second * 60,
         },
-        session: nil,
-        listenInterval: *time.NewTicker(15 * time.Second),
+        spotifySession: nil,
+        lastfmSession: nil,
+        listenInterval: *time.NewTicker(5 * time.Second),
         ctx: context.Background(),
     }
 
@@ -304,7 +528,18 @@ func Run(config Config) error {
 
     cfg.database = database.New(db)
 
-    if err := cfg.AuthWithDB(); err != nil {
+    go func() {
+        StartServer(cfg)
+    }()
+
+    //TODO: Properly wait for server to start befor running auth. Temp fix to start server first when testing locally
+    time.Sleep(time.Second * 4)
+
+    if err := cfg.AuthLastFMWithDB(); err != nil {
+        return err
+    }
+
+    if err := cfg.AuthSpotifyWithDB(); err != nil {
         return err
     }
 

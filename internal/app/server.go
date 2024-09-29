@@ -7,28 +7,32 @@ import (
 
 type server struct {
     mux *http.ServeMux
+    authCfg *AuthCfg
 }
 
-func newServer() *server {
+func newServer(cfg *AuthCfg) *server {
     return &server{
         mux: http.NewServeMux(),
+        authCfg: cfg,
     }
 }
 
 func addRoutes(srv *server) {
-    srv.mux.HandleFunc("GET /callback", handleAuth())
+    srv.mux.HandleFunc("GET /redirect", handleAuth(srv.authCfg))
 }
 
-func handleAuth() http.HandlerFunc {
+func handleAuth(cfg *AuthCfg) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
-        log.Print("yerr")
+        cfg.GetSpotifyTokens(r.URL.Query().Get("code"))
+        log.Println(r.URL.Query())
+        log.Println("yerr")
     }
 }
 
-func StartServer() error {
-    srv := newServer()
+func StartServer(cfg *AuthCfg) error {
+    srv := newServer(cfg)
 
     addRoutes(srv)
 
-    return http.ListenAndServe(":3006", srv.mux)
+    return http.ListenAndServe("localhost:3006", srv.mux)
 }

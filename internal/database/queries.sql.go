@@ -28,6 +28,24 @@ func (q *Queries) GetLastFMSession(ctx context.Context, username string) (GetLas
 	return i, err
 }
 
+const getSpotifySession = `-- name: GetSpotifySession :one
+SELECT spotify_access_token, spotify_refresh_token
+FROM users
+WHERE username = ?
+`
+
+type GetSpotifySessionRow struct {
+	SpotifyAccessToken  sql.NullString
+	SpotifyRefreshToken sql.NullString
+}
+
+func (q *Queries) GetSpotifySession(ctx context.Context, username string) (GetSpotifySessionRow, error) {
+	row := q.db.QueryRowContext(ctx, getSpotifySession, username)
+	var i GetSpotifySessionRow
+	err := row.Scan(&i.SpotifyAccessToken, &i.SpotifyRefreshToken)
+	return i, err
+}
+
 const saveLastFMSession = `-- name: SaveLastFMSession :exec
 UPDATE users
 SET lastfm_session_name = ?,
@@ -43,6 +61,24 @@ type SaveLastFMSessionParams struct {
 
 func (q *Queries) SaveLastFMSession(ctx context.Context, arg SaveLastFMSessionParams) error {
 	_, err := q.db.ExecContext(ctx, saveLastFMSession, arg.LastfmSessionName, arg.LastfmSessionKey, arg.Username)
+	return err
+}
+
+const saveSpotifySession = `-- name: SaveSpotifySession :exec
+UPDATE users
+SET spotify_access_token = ?,
+    spotify_refresh_token = ?
+WHERE username = ?
+`
+
+type SaveSpotifySessionParams struct {
+	SpotifyAccessToken  sql.NullString
+	SpotifyRefreshToken sql.NullString
+	Username            string
+}
+
+func (q *Queries) SaveSpotifySession(ctx context.Context, arg SaveSpotifySessionParams) error {
+	_, err := q.db.ExecContext(ctx, saveSpotifySession, arg.SpotifyAccessToken, arg.SpotifyRefreshToken, arg.Username)
 	return err
 }
 
