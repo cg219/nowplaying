@@ -272,7 +272,7 @@ func Run(config Config) error {
 
     defer os.RemoveAll(tmp)
     dbPath := filepath.Join(tmp, dbName)
-    conn, err := libsql.NewEmbeddedReplicaConnector(dbPath, dbUrl, libsql.WithAuthToken(dbAuthToken), libsql.WithSyncInterval(60))
+    conn, err := libsql.NewEmbeddedReplicaConnector(dbPath, dbUrl, libsql.WithAuthToken(dbAuthToken))
 
     if err != nil {
         return err
