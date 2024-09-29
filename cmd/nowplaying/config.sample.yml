@@ -1,3 +1,9 @@
 lastfm:
   key: lastfm api key
   secret: lastfm api secret
+turso:
+  name: database name
+  token: database token
+  url: database url
+app:
+  name: app username
