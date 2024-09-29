@@ -29,6 +29,11 @@ type Config struct {
         Url string `yaml:"url"`
         Token string `yaml:"token"`
     }
+    Spotify struct {
+        Id string `yaml:"id"`
+        Secret string `yaml:"secret"`
+        Redirect string `yaml:"redirect"`
+    } `yaml:"spotify"`
     App struct {
         Name string `yaml:"name"`
     } `yaml:"app"`

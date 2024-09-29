@@ -5,5 +5,9 @@ turso:
   name: database name
   token: database token
   url: database url
+spotify:
+  id: client id
+  secret: client secret
+  redirect: redirect uri
 app:
   name: app username
