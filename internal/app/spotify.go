@@ -29,6 +29,7 @@ type Spotify struct {
     client *http.Client
     db *database.Queries
     retrying bool
+    youtube *Youtube
 }
 
 type SpotifyConfig struct {
@@ -62,7 +63,9 @@ type SpotifyPlayingErrorResp struct {
     } `json:"error"`
 }
 
-func NewSpotify(u string, c SpotifyConfig, db *database.Queries) *Spotify {
+func NewSpotify(u string, c SpotifyConfig, db *database.Queries, yk string) *Spotify {
+    youtube := NewYoutube(context.Background(), yk)
+
     return &Spotify{
         client: &http.Client{
             Timeout: time.Second * 10,
@@ -72,6 +75,7 @@ func NewSpotify(u string, c SpotifyConfig, db *database.Queries) *Spotify {
         db: db,
         config: c,
         retrying: false,
+        youtube: youtube,
     }
 }
 
@@ -241,6 +245,7 @@ func (s *Spotify) CheckCurrentTrack(ctx context.Context) error {
 
         s.retrying = false
         log.Printf("Spotify: %s - %s\n", data.Item.Artist[0].Name, data.Item.Song)
+        log.Printf("Music URL: %s\n", s.youtube.Search(fmt.Sprintf("%s - %s", data.Item.Artist[0].Name, data.Item.Song)))
     } else {
         var data SpotifyPlayingErrorResp
         err = json.NewDecoder(resp.Body).Decode(&data)

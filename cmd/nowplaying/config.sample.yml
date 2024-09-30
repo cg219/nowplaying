@@ -9,5 +9,7 @@ spotify:
   id: client id
   secret: client secret
   redirect: redirect uri
+youtube:
+  key: api key
 app:
   name: app username
