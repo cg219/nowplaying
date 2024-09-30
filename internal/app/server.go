@@ -23,9 +23,9 @@ func addRoutes(srv *server) {
 
 func handleAuth(cfg *AuthCfg) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
-        cfg.GetSpotifyTokens(r.URL.Query().Get("code"))
+        cfg.SpotifySession.SetAuthCode(r.URL.Query().Get("code"))
+        cfg.SpotifySession.GetSpotifyTokens(r.Context())
         log.Println(r.URL.Query())
-        log.Println("yerr")
     }
 }
 
