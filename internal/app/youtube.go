@@ -5,38 +5,27 @@ import (
 	"fmt"
 	"log"
 
-	"google.golang.org/api/option"
-	"google.golang.org/api/youtube/v3"
+	"github.com/ppalone/ytsearch"
 )
 
 type Youtube struct {
-    service *youtube.Service
+    service *ytsearch.Client
     creds struct {
         Key string
     }
 }
 
-func NewYoutube(ctx context.Context, key string) *Youtube {
-    service, err := youtube.NewService(ctx, option.WithAPIKey(key))
-    if err != nil {
-        log.Fatalf("Oops: %s", err)
-    }
-
+func NewYoutube(ctx context.Context) *Youtube {
     return &Youtube{
-        service: service,
+        service: &ytsearch.Client{},
     }
 }
 
 func (y *Youtube) Search(term string) string {
-    call := y.service.Search.
-        List([]string{"id"}).
-        Q(term).
-        MaxResults(int64(1))
-
-    res, err := call.Do()
+    res, err := y.service.Search(term)
     if err != nil {
         log.Fatalf("Oops: %s", err)
     }
 
-    return fmt.Sprintf("https://youtu.be/%s", res.Items[0].Id.VideoId)
+    return fmt.Sprintf("https://youtu.be/%s", res.Results[0].VideoID)
 }

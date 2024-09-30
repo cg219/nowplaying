@@ -29,9 +29,6 @@ type Config struct {
         Secret string `yaml:"secret"`
         Redirect string `yaml:"redirect"`
     } `yaml:"spotify"`
-    Youtube struct {
-        Key string `yaml:"key"`
-    } `yaml:"youtube"`
     App struct {
         Name string `yaml:"name"`
     } `yaml:"app"`
@@ -114,7 +111,7 @@ func Run(config Config) error {
 
     sessions := []Session{
         NewLastFM(cfg.config.App.Name, LastFMConfig(cfg.config.LastFM), cfg.database),
-        NewSpotify(cfg.config.App.Name, SpotifyConfig(cfg.config.Spotify), cfg.database, cfg.config.Youtube.Key),
+        NewSpotify(cfg.config.App.Name, SpotifyConfig(cfg.config.Spotify), cfg.database),
     }
     exit := make(chan struct{})
     defer close(exit)

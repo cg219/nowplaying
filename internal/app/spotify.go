@@ -63,9 +63,7 @@ type SpotifyPlayingErrorResp struct {
     } `json:"error"`
 }
 
-func NewSpotify(u string, c SpotifyConfig, db *database.Queries, yk string) *Spotify {
-    youtube := NewYoutube(context.Background(), yk)
-
+func NewSpotify(u string, c SpotifyConfig, db *database.Queries) *Spotify {
     return &Spotify{
         client: &http.Client{
             Timeout: time.Second * 10,
@@ -75,7 +73,7 @@ func NewSpotify(u string, c SpotifyConfig, db *database.Queries, yk string) *Spo
         db: db,
         config: c,
         retrying: false,
-        youtube: youtube,
+        youtube: NewYoutube(context.Background()),
     }
 }
 
