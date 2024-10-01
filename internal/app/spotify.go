@@ -29,7 +29,6 @@ type Spotify struct {
     client *http.Client
     db *database.Queries
     retrying bool
-    youtube *Youtube
 }
 
 type SpotifyConfig struct {
@@ -50,10 +49,34 @@ type SpotifyPlayingResp struct {
     Item struct {
         Album struct {
             Name string `json:"name"`
+            Artist []struct{ Name string `json:"name"`} `json:"artists"`
         } `json:"album"`
         Artist []struct{ Name string `json:"name"`} `json:"artists"`
         Song string `json:"name"`
+        Duration json.Number `json:"duration_ms"`
+        IsLocal bool `json:"is_local"`
+        TrackNumber json.Number `json:"track_number"`
+        Uri string `json:"uri"`
     } `json:"item"`
+    Actions struct {
+        Disallows struct {
+            Resumed bool `json:"resuming"`
+            Paused bool `json:"pausing"`
+        } `json:"disallows"`
+    } `json:"actions"`
+}
+
+type SpotifySong struct {
+    Artist string
+    Name string
+    Album struct {
+        Name string
+        Artist string
+    }
+    Progress int
+    Duration int
+    Timestamp int
+    TrackNumber int
 }
 
 type SpotifyPlayingErrorResp struct {
@@ -73,7 +96,32 @@ func NewSpotify(u string, c SpotifyConfig, db *database.Queries) *Spotify {
         db: db,
         config: c,
         retrying: false,
-        youtube: NewYoutube(context.Background()),
+    }
+}
+
+func NewSpotifySongFromResp(resp SpotifyPlayingResp) *SpotifySong {
+    albumArtist := resp.Item.Artist[0].Name
+
+    if len(resp.Item.Album.Artist) > 0 {
+        albumArtist = resp.Item.Album.Artist[0].Name
+    }
+
+    progress, _ := resp.Progress.Int64()
+    duration, _ := resp.Item.Duration.Int64()
+    trackNumber, _ := resp.Item.TrackNumber.Int64()
+    timestamp, _ := resp.Timestamp.Int64()
+
+    return &SpotifySong{
+        Artist: resp.Item.Artist[0].Name,
+        Name: resp.Item.Song,
+        Album: struct{Name string; Artist string}{
+            Name: resp.Item.Album.Name,
+            Artist: albumArtist,
+        },
+        Progress: int(progress),
+        Duration: int(duration),
+        Timestamp: int(time.Unix(timestamp, 0).Unix()),
+        TrackNumber: int(trackNumber),
     }
 }
 
@@ -81,7 +129,7 @@ func (s *Spotify) SetAuthCode(code string) {
     s.creds.AuthCode = code
 }
 
-func (s *Spotify) Listen(ctx context.Context) error {
+func (s *Spotify) Listen(ctx context.Context, out *chan any) error {
     done := make(chan bool)
     timer := time.NewTicker(s.Duration)
     defer close(done)
@@ -91,11 +139,15 @@ func (s *Spotify) Listen(ctx context.Context) error {
         case <- done:
             return nil
         case <- timer.C:
-            err := s.CheckCurrentTrack(ctx)
+            song, err := s.CheckCurrentTrack(ctx)
 
             if err != nil {
                 log.Printf("Oops: %s\n", err)
                 return err
+            }
+
+            if out != nil && song != nil {
+                *out <- song
             }
         }
     }
@@ -214,13 +266,10 @@ func (s *Spotify) AuthWithDB(ctx context.Context) error {
     return nil
 }
 
-func (s *Spotify) CheckCurrentTrack(ctx context.Context) error {
-    // vals := url.Values{}
-    // vals.Set("markets", "US")
-
+func (s *Spotify) CheckCurrentTrack(ctx context.Context) (*SpotifySong, error) {
     req, err := http.NewRequestWithContext(ctx, "GET", "https://api.spotify.com/v1/me/player/currently-playing", nil)
     if err != nil {
-        return err
+        return nil, err
     }
 
     req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.creds.AccessToken))
@@ -228,7 +277,7 @@ func (s *Spotify) CheckCurrentTrack(ctx context.Context) error {
 
     resp, err := s.client.Do(req)
     if err != nil {
-        return err
+        return nil, err
     }
 
     defer resp.Body.Close()
@@ -238,18 +287,20 @@ func (s *Spotify) CheckCurrentTrack(ctx context.Context) error {
         err = json.NewDecoder(resp.Body).Decode(&data)
         if err != nil {
             log.Println(err.Error())
-            return err
+            return nil, err
         }
 
+        song := NewSpotifySongFromResp(data)
         s.retrying = false
-        log.Printf("Spotify: %s - %s\n", data.Item.Artist[0].Name, data.Item.Song)
-        log.Printf("Music URL: %s\n", s.youtube.Search(fmt.Sprintf("%s - %s", data.Item.Artist[0].Name, data.Item.Song)))
+        log.Printf("Spotify: %s - %s\n", song.Artist, song.Name)
+
+        return song, nil
     } else {
         var data SpotifyPlayingErrorResp
         err = json.NewDecoder(resp.Body).Decode(&data)
         if err != nil {
             if err != io.EOF {
-                return err
+                return nil, err
             }
         }
 
@@ -257,9 +308,13 @@ func (s *Spotify) CheckCurrentTrack(ctx context.Context) error {
             log.Println("Refreshing Spotify Tokens")
             s.retrying = true
             s.RefreshSpotifyTokens(ctx)
-            s.CheckCurrentTrack(ctx)
+            return s.CheckCurrentTrack(ctx)
         }
     }
 
-    return nil
+    return nil, nil
+}
+
+func (s *SpotifySong) String() string {
+    return fmt.Sprintf("%s - %s\n%s (by %s)\nTrack: %d", s.Artist, s.Name, s.Album.Name, s.Album.Artist, s.Timestamp)
 }

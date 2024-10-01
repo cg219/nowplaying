@@ -8,6 +8,19 @@ import (
 	"database/sql"
 )
 
+type Scrobble struct {
+	ID          int64
+	ArtistName  string
+	TrackName   string
+	AlbumName   sql.NullString
+	AlbumArtist sql.NullString
+	TrackNumber sql.NullString
+	Duration    int64
+	Timestamp   int64
+	Source      sql.NullString
+	Mbid        sql.NullString
+}
+
 type User struct {
 	ID                  int64
 	Username            string

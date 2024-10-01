@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -47,12 +48,9 @@ type AuthCfg struct {
 
 type Session interface {
     AuthWithDB(context.Context) error
-    Listen(context.Context) error
+    Listen(context.Context, *chan any) error
 }
 
-// TODO:
-// - Lookup track on youtube for a link
-// - Setup ai to verify the youtube link
 func Run(config Config) error {
     cfg := &AuthCfg{
         config: config,
@@ -106,26 +104,46 @@ func Run(config Config) error {
         StartServer(cfg)
     }()
 
-    //TODO: Properly wait for server to start befor running auth. Temp fix to start server first when testing locally
-    // time.Sleep(time.Second * 2)
 
-    sessions := []Session{
-        NewLastFM(cfg.config.App.Name, LastFMConfig(cfg.config.LastFM), cfg.database),
-        NewSpotify(cfg.config.App.Name, SpotifyConfig(cfg.config.Spotify), cfg.database),
-    }
+    // lastfm := NewLastFM(cfg.config.App.Name, LastFMConfig(cfg.config.LastFM), cfg.database)
+    spotify := NewSpotify(cfg.config.App.Name, SpotifyConfig(cfg.config.Spotify), cfg.database)
+    scrobbler := NewScrobbler(cfg.config.App.Name, cfg.database)
+    yts := NewYoutube(cfg.ctx)
     exit := make(chan struct{})
+    output := make(chan any)
+    sessions := []Session{ spotify, scrobbler }
+    defer close(output)
     defer close(exit)
 
     for _, s := range sessions {
         go func() {
             s.AuthWithDB(cfg.ctx)
 
-            if err := s.Listen(cfg.ctx); err != nil {
+            if err := s.Listen(cfg.ctx, &output); err != nil {
                 log.Printf("Oops: %s", err)
             }
             exit <- struct{}{}
         }()
     }
+
+    go func() {
+        for v := range output {
+            switch v := v.(type) {
+            case *SpotifySong:
+                log.Printf("Music URL: %s\n", yts.Search(fmt.Sprintf("%s - %s", v.Artist, v.Name)))
+                scrobbler.Scrobble(context.Background(), Scrobble{
+                    ArtistName: v.Artist,
+                    TrackName: v.Name,
+                    AlbumName: v.Album.Name,
+                    AlbumArtist: v.Album.Artist,
+                    Timestamp: v.Timestamp,
+                    Duration: v.Duration,
+                    TrackNumber: fmt.Sprintf("%d", v.TrackNumber),
+                    Source: "spotify-local",
+                }) 
+            }
+        }
+    }()
 
     <- exit
     return nil

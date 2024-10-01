@@ -28,6 +28,32 @@ func (q *Queries) GetLastFMSession(ctx context.Context, username string) (GetLas
 	return i, err
 }
 
+const getLatestTrack = `-- name: GetLatestTrack :one
+SELECT artist_name, track_name, timestamp, duration
+FROM scrobbles
+ORDER BY timestamp DESC
+LIMIT 1
+`
+
+type GetLatestTrackRow struct {
+	ArtistName string
+	TrackName  string
+	Timestamp  int64
+	Duration   int64
+}
+
+func (q *Queries) GetLatestTrack(ctx context.Context) (GetLatestTrackRow, error) {
+	row := q.db.QueryRowContext(ctx, getLatestTrack)
+	var i GetLatestTrackRow
+	err := row.Scan(
+		&i.ArtistName,
+		&i.TrackName,
+		&i.Timestamp,
+		&i.Duration,
+	)
+	return i, err
+}
+
 const getSpotifySession = `-- name: GetSpotifySession :one
 SELECT spotify_access_token, spotify_refresh_token
 FROM users
@@ -46,6 +72,16 @@ func (q *Queries) GetSpotifySession(ctx context.Context, username string) (GetSp
 	return i, err
 }
 
+const removeScrobble = `-- name: RemoveScrobble :exec
+DELETE FROM scrobbles
+WHERE id = ?
+`
+
+func (q *Queries) RemoveScrobble(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, removeScrobble, id)
+	return err
+}
+
 const saveLastFMSession = `-- name: SaveLastFMSession :exec
 UPDATE users
 SET lastfm_session_name = ?,
@@ -61,6 +97,38 @@ type SaveLastFMSessionParams struct {
 
 func (q *Queries) SaveLastFMSession(ctx context.Context, arg SaveLastFMSessionParams) error {
 	_, err := q.db.ExecContext(ctx, saveLastFMSession, arg.LastfmSessionName, arg.LastfmSessionKey, arg.Username)
+	return err
+}
+
+const saveScrobble = `-- name: SaveScrobble :exec
+INSERT INTO scrobbles(artist_name, track_name, album_name, album_artist, mbid, track_number, duration, timestamp, source)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type SaveScrobbleParams struct {
+	ArtistName  string
+	TrackName   string
+	AlbumName   sql.NullString
+	AlbumArtist sql.NullString
+	Mbid        sql.NullString
+	TrackNumber sql.NullString
+	Duration    int64
+	Timestamp   int64
+	Source      sql.NullString
+}
+
+func (q *Queries) SaveScrobble(ctx context.Context, arg SaveScrobbleParams) error {
+	_, err := q.db.ExecContext(ctx, saveScrobble,
+		arg.ArtistName,
+		arg.TrackName,
+		arg.AlbumName,
+		arg.AlbumArtist,
+		arg.Mbid,
+		arg.TrackNumber,
+		arg.Duration,
+		arg.Timestamp,
+		arg.Source,
+	)
 	return err
 }
 

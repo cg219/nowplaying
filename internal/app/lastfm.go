@@ -1,15 +1,19 @@
 package app
 
 import (
+	// "bytes"
 	"context"
 	"crypto/md5"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/cg219/nowplaying/internal/database"
@@ -25,6 +29,17 @@ type LastFM struct {
     config LastFMConfig
     client *http.Client
     db *database.Queries
+}
+
+type LastFMScrobble struct {
+    Artist string `json:"artist"`
+    Track string `json:"track"`
+    Timestamp string `json:"timestamp"`
+    Album string `json:"album,omitempty"`
+    TrackNumber string `json:"tracknumber,omitempty"`
+    Mbid string `json:"mbid,omitempty"`
+    AlbumArtist string `json:"albumArtist,omitempty"`
+    Duration string `json:"duration,omitempty"`
 }
 
 type LastFMSessionResp struct {
@@ -96,7 +111,7 @@ func NewLastFM(u string, c LastFMConfig, db *database.Queries) *LastFM {
     }
 }
 
-func (l *LastFM) Listen(ctx context.Context) error {
+func (l *LastFM) Listen(ctx context.Context, out *chan any) error {
     done := make(chan bool)
     timer := time.NewTicker(l.Duration)
     defer close(done)
@@ -119,10 +134,7 @@ func (l *LastFM) Listen(ctx context.Context) error {
 func (l *LastFM) Auth(ctx context.Context) error {
     authurl := "http://www.last.fm/api/auth/?api_key=%s&token=%s"
     respBody := tokenResp{}
-    req, err := http.NewRequestWithContext(ctx, "GET", l.makeApiUrl("auth.gettoken", nil), nil)
-    if err != nil {
-        return err
-    }
+    req := l.makeApiRequest("GET", "auth.gettoken", nil) 
 
     resp, err := l.client.Do(req)
     if err != nil {
@@ -141,10 +153,7 @@ func (l *LastFM) Auth(ctx context.Context) error {
     fmt.Println("Hit Enter to Continue after authorization")
     fmt.Scanln()
 
-    req, err = http.NewRequestWithContext(ctx, "GET", l.makeApiUrl("auth.getsession", []apiParam{{ Name: "token", Value: respBody.Token }}), nil)
-    if err != nil {
-        return err
-    }
+    req = l.makeApiRequest("GET", "auth.getsession", []apiParam{{ Name: "token", Value: respBody.Token }})
 
     resp2, err := l.client.Do(req)
     if err != nil {
@@ -190,15 +199,53 @@ func (l *LastFM) AuthWithDB(ctx context.Context) error {
     return nil
 }
 
-func (l *LastFM) CheckCurrentTrack(ctx context.Context) error {
-    req, err := http.NewRequestWithContext(ctx, "GET", l.makeApiUrl("user.getrecenttracks", []apiParam{
-        { Name: "sk", Value: l.creds.Key },
-        { Name: "limit", Value: "1" },
-        { Name: "user", Value: l.creds.Name },
-    }), nil)
+func (l *LastFM) Scrobble(ctx context.Context, sc LastFMScrobble) error {
+    params := []apiParam{}
+    params = append(params, apiParam{ Name: "artist", Value: sc.Artist })
+    params = append(params, apiParam{ Name: "track", Value: sc.Track })
+    params = append(params, apiParam{ Name: "timestamp", Value: sc.Timestamp })
+    params = append(params, apiParam{ Name: "album", Value: sc.Album })
+    params = append(params, apiParam{ Name: "trackNumber", Value: sc.TrackNumber })
+    params = append(params, apiParam{ Name: "mbid", Value: sc.Mbid })
+    params = append(params, apiParam{ Name: "albumArtist", Value: sc.AlbumArtist })
+    params = append(params, apiParam{ Name: "duration", Value: sc.Duration })
+    params = append(params, apiParam{ Name: "sk", Value: l.creds.Key })
+    req := l.makeApiRequest("POST", "track.scrobble", params)
+    req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+    resp, err := l.client.Do(req)
     if err != nil {
         return err
     }
+    
+    defer resp.Body.Close()
+
+    d, _ := io.ReadAll(resp.Body)
+
+    log.Printf("SE: %s", d)
+
+    // var tracklist map[string]any
+    // err = json.NewDecoder(resp.Body).Decode(&tracklist)
+    // if err != nil {
+    //     log.Println("decode")
+    //     return err
+    // }
+    //
+    // log.Println("Output---")
+    // for k, v := range tracklist {
+    //     log.Printf("%s: %s\n", k, v)
+    // }
+    // log.Println("---------")
+
+    return nil
+}
+
+func (l *LastFM) CheckCurrentTrack(ctx context.Context) error {
+    req := l.makeApiRequest("GET", "user.getrecenttracks", []apiParam{
+        { Name: "sk", Value: l.creds.Key },
+        { Name: "limit", Value: "1" },
+        { Name: "user", Value: l.creds.Name },
+    })
 
     resp, err := l.client.Do(req)
     if err != nil {
@@ -217,18 +264,46 @@ func (l *LastFM) CheckCurrentTrack(ctx context.Context) error {
     return nil
 }
 
-func (l *LastFM) makeApiUrl(method string, list []apiParam) string {
-    baseurl := "http://ws.audioscrobbler.com/2.0/?format=json&api_sig=%s%s"
+func (l *LastFM) makeApiRequest(action string, method string, list []apiParam) *http.Request {
     params := ""
-    list = append(list, apiParam{ Name: "api_key", Value: l.config.Key })
-    list = append(list, apiParam{ Name: "method", Value: method })
 
-    for _, p := range(list) {
-        params = fmt.Sprintf("%s&%s=%s", params, p.Name, p.Value)
+    if list == nil {
+        list = []apiParam{}
     }
 
-    log.Printf(baseurl, l.makeSignature(list), params)
-    return fmt.Sprintf(baseurl, l.makeSignature(list), params)
+    list = append(list, apiParam{ Name: "api_key", Value: l.config.Key })
+    list = append(list, apiParam{ Name: "method", Value: method })
+    
+    body := &url.Values{}
+
+    for _, p := range(list) {
+        params = fmt.Sprintf("%s&%s=%s", params, p.Name, url.QueryEscape(p.Value))
+        body.Set(p.Name, p.Value)
+    }
+
+
+    if action == "GET" {
+        baseurl := "http://ws.audioscrobbler.com/2.0/?format=json&api_sig=%s%s"
+        signedUrl := fmt.Sprintf(baseurl, l.makeSignature(list), params)
+        log.Printf("Signed URL: %s", signedUrl)
+        req, err := http.NewRequest(action, signedUrl, nil)
+
+        if err != nil {
+            log.Fatal("Error making LastFM API request")
+        }
+        
+        return req
+    }
+
+    baseurl := "http://ws.audioscrobbler.com/2.0/?api_sig=%s"
+    signedUrl := fmt.Sprintf(baseurl, l.makeSignature(list))
+    req, err := http.NewRequest(action, signedUrl, strings.NewReader(body.Encode()))
+
+    if err != nil {
+        log.Fatal("Error making LastFM API request")
+    }
+
+    return req
 }
 
 func (l *LastFM) makeSignature(list []apiParam) string {
