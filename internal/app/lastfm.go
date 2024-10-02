@@ -168,7 +168,7 @@ func (l *LastFM) Auth(ctx context.Context) error {
         return err
     }
 
-    l.db.SaveUser(ctx, l.Username)
+    // l.db.SaveUser(ctx, l.Username)
     l.db.SaveLastFMSession(ctx, database.SaveLastFMSessionParams{
         LastfmSessionName: sql.NullString{ String: session.Session.Name, Valid: true },
         LastfmSessionKey: sql.NullString{ String: session.Session.Key, Valid: true },

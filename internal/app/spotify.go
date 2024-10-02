@@ -204,7 +204,7 @@ func (s *Spotify) GetSpotifyTokens(ctx context.Context) error {
         return err
     }
     
-    s.db.SaveUser(ctx, s.Username)
+    // s.db.SaveUser(ctx, s.Username)
     s.db.SaveSpotifySession(ctx, database.SaveSpotifySessionParams{
         SpotifyAccessToken: sql.NullString{ String: data.AccessToken, Valid: true },
         SpotifyRefreshToken: sql.NullString{ String: data.RefreshToken, Valid: true },
