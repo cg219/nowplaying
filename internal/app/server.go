@@ -1,17 +1,21 @@
 package app
 
 import (
+	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/cg219/nowplaying/internal/database"
 	"github.com/cg219/nowplaying/pkg/argon2id"
 	"github.com/cg219/nowplaying/pkg/webtoken"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type Server struct {
@@ -77,7 +81,7 @@ func addRoutes(srv *Server) {
     srv.mux.Handle("GET /auth/spotify-redirect", srv.handle(srv.SpotifyRedirect))
     srv.mux.Handle("POST /auth/register", srv.handle(srv.Register))
     srv.mux.Handle("POST /auth/login", srv.handle(srv.Login))
-    srv.mux.Handle("POST /auth/refresh", srv.handle(srv.RefreshAccessToken))
+    srv.mux.Handle("GET /test/x", srv.handle(srv.UserOnly, srv.Test))
 }
 
 func return500(w http.ResponseWriter) {
@@ -116,6 +120,122 @@ func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     if err := h(w, r); err != nil {
         fmt.Println("OOPS")
     }
+}
+
+func (s *Server) Test(w http.ResponseWriter, r *http.Request) error {
+    type TestResp struct {
+        SuccessResp
+        Value string `json:"value"`
+    }
+
+    resp := TestResp{ Value: r.Context().Value("username").(string)}
+    resp.Success = true
+    encode[TestResp](w, http.StatusOK, resp)
+    return nil
+}
+
+func (s *Server) UserOnly(w http.ResponseWriter, r *http.Request) error {
+    accessTokenExpired := true
+    refreshTokenExpired := true
+    cookie, err := r.Cookie("nowplaying")
+    if err != nil {
+        s.log.Error("Cookie Retrieval", "cookie", "nowplaying", "method", "UserOnly", "request", r, "error", err.Error())
+        return fmt.Errorf(AUTH_ERROR)
+    }
+
+    value, err := base64.StdEncoding.DecodeString(cookie.Value)
+    if err != nil {
+        s.log.Error("Base64 Decoding", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
+        return fmt.Errorf(AUTH_ERROR)
+    }
+
+    var cookieValue webtoken.CookieAuthValue
+    err = json.Unmarshal(value, &cookieValue)
+    if err != nil {
+        s.log.Error("Invalid Cookie Value", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
+        return fmt.Errorf(AUTH_ERROR)
+    }
+
+    accessToken, err := webtoken.GetParsedJWT(cookieValue.AccessToken, "notsecure")
+    if err != nil {
+        fmt.Println()
+
+        if !strings.Contains(err.Error(), jwt.ErrTokenExpired.Error()) {
+            s.log.Error("Invalid AccessToken", "accessToken", cookieValue.AccessToken, "method", "UserOnly", "request", r, "error", err.Error())
+            return fmt.Errorf(AUTH_ERROR)
+        }
+    } else {
+        accessTokenExpired = false
+    }
+
+    refreshToken, err := webtoken.GetParsedJWT(cookieValue.RefreshToken, "notsecure")
+    if err != nil {
+        if !strings.Contains(err.Error(), jwt.ErrTokenExpired.Error()) {
+            s.log.Error("Invalid RefreshToken", "refreshToken", cookieValue.RefreshToken, "method", "UserOnly", "request", r, "error", err.Error())
+            return fmt.Errorf(AUTH_ERROR)
+        }
+    } else {
+        refreshTokenExpired = false
+    }
+
+    rfs, err := refreshToken.Claims.GetSubject()
+    if err != nil {
+        s.log.Error("Invalid RefreshToken", "method", "UserOnly", "request", r, "error", err.Error())
+        return fmt.Errorf(AUTH_ERROR)
+    }
+
+    var rf webtoken.Subject
+    err = json.Unmarshal([]byte(rfs), &rf)
+    if err != nil {
+        s.log.Error("Invalid RefreshToken", "refreshToken", rfs, "method", "UserOnly", "request", r, "error", err.Error())
+        return fmt.Errorf(AUTH_ERROR)
+    }
+
+    if refreshTokenExpired {
+        s.log.Error("Expired RefreshToken", "refreshToken", cookieValue.RefreshToken, "method", "UserOnly", "request", r)
+        s.authCfg.database.InvalidateUserSession(r.Context(), database.InvalidateUserSessionParams{
+            Accesstoken: cookieValue.AccessToken,
+            Refreshtoken: rf.Value,
+        })
+        return fmt.Errorf(AUTH_ERROR)
+    }
+
+    _, err = s.authCfg.database.GetUserSession(r.Context(), database.GetUserSessionParams{
+        Accesstoken: cookieValue.AccessToken,
+        Refreshtoken: rf.Value,
+    })
+    if err != nil {
+        s.log.Error("Retreiving User Session", "method", "UserOnly", "request", r, "error", err.Error())
+        return fmt.Errorf(AUTH_ERROR)
+    }
+
+    us, err := accessToken.Claims.GetSubject()
+    if err != nil {
+        s.log.Error("Invalid AccessToken", "method", "UserOnly", "request", r, "error", err.Error())
+        return fmt.Errorf(AUTH_ERROR)
+    }
+
+    var username webtoken.Subject
+    err = json.Unmarshal([]byte(us), &username)
+    if err != nil {
+        s.log.Error("Invalid AccessToken", "accessToken", us, "method", "UserOnly", "request", r, "error", err.Error())
+        return fmt.Errorf(AUTH_ERROR)
+    }
+
+    if accessTokenExpired {
+        s.log.Error("Expired AccessToken", "accessToken", cookieValue.AccessToken, "method", "UserOnly", "request", r )
+        s.authCfg.database.InvalidateUserSession(r.Context(), database.InvalidateUserSessionParams{
+            Accesstoken: cookieValue.AccessToken,
+            Refreshtoken: rf.Value,
+        })
+        s.RefreshAccessToken(r.Context(), rf.Value, username.Value, w)
+    }
+
+    ctx := context.WithValue(r.Context(), "username", username.Value)
+    updatedRequest := r.WithContext(ctx)
+
+    *r = *updatedRequest
+    return nil
 }
 
 func (s *Server) Register(w http.ResponseWriter, r *http.Request) error {
@@ -204,7 +324,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) error {
         return fmt.Errorf(AUTH_ERROR)
     }
 
-    accessToken := webtoken.NewToken("accessToken", body.Username, "notsecure", time.Now().Add(time.Hour * 1))
+    accessToken := webtoken.NewToken("accessToken", body.Username, "notsecure", time.Now().Add(time.Hour* 1))
     refreshToken := webtoken.NewToken("refreshToken", webtoken.GenerateRefreshString(), "notsecure", time.Now().Add(time.Hour * 24 * 30))
     accessToken.Create("nowplaying")
     refreshToken.Create("nowplaying")
@@ -222,8 +342,21 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) error {
     return nil
 }
 
-func (s *Server) RefreshAccessToken(w http.ResponseWriter, r *http.Request) error {
-    return nil
+func (s* Server) RefreshAccessToken(ctx context.Context, refresh, username string, w http.ResponseWriter) {
+    accessToken := webtoken.NewToken("accessToken", username, "notsecure", time.Now().Add(time.Hour * 1))
+    refreshToken := webtoken.NewToken("refreshToken", refresh, "notsecure", time.Now().Add(time.Hour * 24 * 30))
+    accessToken.Create("nowplaying")
+    refreshToken.Create("nowplaying")
+    cookieValue := webtoken.CookieAuthValue{ AccessToken: accessToken.Value(), RefreshToken: refreshToken.Value() }
+    cookie := webtoken.NewAuthCookie("nowplaying", "/", cookieValue, int(time.Hour * 24 * 30))
+
+    s.authCfg.database.SaveUserSession(ctx, database.SaveUserSessionParams{
+        Accesstoken: accessToken.Value(),
+        Refreshtoken: refreshToken.Subject(),
+    })
+
+    http.SetCookie(w, &cookie)
+    s.log.Info("Refresh User Tokens", "username", username)
 }
 
 func (s *Server) SpotifyRedirect(w http.ResponseWriter, r *http.Request) error {

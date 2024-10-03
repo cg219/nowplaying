@@ -65,5 +65,5 @@ VALUES(?, ?);
 
 -- name: InvalidateUserSession :exec
 UPDATE sessions
-SET valid = ?
+SET valid = 0
 WHERE accessToken = ? AND refreshToken = ?;

@@ -81,7 +81,7 @@ func GenerateRefreshString() string {
 func GetParsedJWT(value string, secret string) (*jwt.Token, error) {
     token, err := jwt.ParseWithClaims(value, &jwt.RegisteredClaims{}, func(t *jwt.Token) (interface{}, error) { return []byte(secret), nil })
     if err != nil {
-        return nil, fmt.Errorf("Parsing JWT")
+        return token, err
     }
 
     return token, nil

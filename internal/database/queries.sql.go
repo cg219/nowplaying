@@ -129,18 +129,17 @@ func (q *Queries) GetUserWithPassword(ctx context.Context, username string) (Get
 
 const invalidateUserSession = `-- name: InvalidateUserSession :exec
 UPDATE sessions
-SET valid = ?
+SET valid = 0
 WHERE accessToken = ? AND refreshToken = ?
 `
 
 type InvalidateUserSessionParams struct {
-	Valid        sql.NullInt64
 	Accesstoken  string
 	Refreshtoken string
 }
 
 func (q *Queries) InvalidateUserSession(ctx context.Context, arg InvalidateUserSessionParams) error {
-	_, err := q.db.ExecContext(ctx, invalidateUserSession, arg.Valid, arg.Accesstoken, arg.Refreshtoken)
+	_, err := q.db.ExecContext(ctx, invalidateUserSession, arg.Accesstoken, arg.Refreshtoken)
 	return err
 }
 
