@@ -26,8 +26,18 @@ SET spotify_access_token = ?
 WHERE username = ?;
 
 -- name: SaveUser :exec
-INSERT INTO users(username)
-VALUES(?);
+INSERT INTO users(username, password)
+VALUES(?, ?);
+
+-- name: GetUser :one
+SELECT id, username
+FROM users
+WHERE username = ?;
+
+-- name: GetUserWithPassword :one
+SELECT username, password
+FROM users
+WHERE username = ?;
 
 -- name: GetLatestTrack :one
 SELECT artist_name, track_name, timestamp, duration

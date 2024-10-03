@@ -28,4 +28,5 @@ type User struct {
 	SpotifyRefreshToken sql.NullString
 	LastfmSessionName   sql.NullString
 	LastfmSessionKey    sql.NullString
+	Password            interface{}
 }
