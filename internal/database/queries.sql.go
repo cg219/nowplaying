@@ -90,6 +90,25 @@ func (q *Queries) GetUser(ctx context.Context, username string) (GetUserRow, err
 	return i, err
 }
 
+const getUserSession = `-- name: GetUserSession :one
+SELECT accessToken, refreshToken, valid
+FROM sessions
+WHERE accessToken = ? AND refreshToken = ?
+LIMIT 1
+`
+
+type GetUserSessionParams struct {
+	Accesstoken  string
+	Refreshtoken string
+}
+
+func (q *Queries) GetUserSession(ctx context.Context, arg GetUserSessionParams) (Session, error) {
+	row := q.db.QueryRowContext(ctx, getUserSession, arg.Accesstoken, arg.Refreshtoken)
+	var i Session
+	err := row.Scan(&i.Accesstoken, &i.Refreshtoken, &i.Valid)
+	return i, err
+}
+
 const getUserWithPassword = `-- name: GetUserWithPassword :one
 SELECT username, password
 FROM users
@@ -106,6 +125,23 @@ func (q *Queries) GetUserWithPassword(ctx context.Context, username string) (Get
 	var i GetUserWithPasswordRow
 	err := row.Scan(&i.Username, &i.Password)
 	return i, err
+}
+
+const invalidateUserSession = `-- name: InvalidateUserSession :exec
+UPDATE sessions
+SET valid = ?
+WHERE accessToken = ? AND refreshToken = ?
+`
+
+type InvalidateUserSessionParams struct {
+	Valid        sql.NullInt64
+	Accesstoken  string
+	Refreshtoken string
+}
+
+func (q *Queries) InvalidateUserSession(ctx context.Context, arg InvalidateUserSessionParams) error {
+	_, err := q.db.ExecContext(ctx, invalidateUserSession, arg.Valid, arg.Accesstoken, arg.Refreshtoken)
+	return err
 }
 
 const removeScrobble = `-- name: RemoveScrobble :exec
@@ -198,6 +234,21 @@ type SaveUserParams struct {
 
 func (q *Queries) SaveUser(ctx context.Context, arg SaveUserParams) error {
 	_, err := q.db.ExecContext(ctx, saveUser, arg.Username, arg.Password)
+	return err
+}
+
+const saveUserSession = `-- name: SaveUserSession :exec
+INSERT INTO sessions(accessToken, refreshToken)
+VALUES(?, ?)
+`
+
+type SaveUserSessionParams struct {
+	Accesstoken  string
+	Refreshtoken string
+}
+
+func (q *Queries) SaveUserSession(ctx context.Context, arg SaveUserSessionParams) error {
+	_, err := q.db.ExecContext(ctx, saveUserSession, arg.Accesstoken, arg.Refreshtoken)
 	return err
 }
 

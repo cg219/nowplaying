@@ -52,3 +52,18 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);
 -- name: RemoveScrobble :exec
 DELETE FROM scrobbles
 WHERE id = ?;
+
+-- name: GetUserSession :one
+SELECT accessToken, refreshToken, valid
+FROM sessions
+WHERE accessToken = ? AND refreshToken = ?
+LIMIT 1;
+
+-- name: SaveUserSession :exec
+INSERT INTO sessions(accessToken, refreshToken)
+VALUES(?, ?);
+
+-- name: InvalidateUserSession :exec
+UPDATE sessions
+SET valid = ?
+WHERE accessToken = ? AND refreshToken = ?;

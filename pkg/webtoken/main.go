@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -22,6 +23,10 @@ type Token struct {
 
 type Subject struct {
     Value string `json:"value"`
+}
+
+type CookieAuthValue struct {
+    AccessToken string `json:"access"`
     RefreshToken string `json:"refresh"`
 }
 
@@ -34,10 +39,12 @@ func NewToken(name, subject, secret string, expires time.Time) Token {
     }
 }
 
-func NewCookie(name, value, path string, maxage int) http.Cookie {
+func NewAuthCookie(name, path string, value CookieAuthValue, maxage int) http.Cookie {
+    encodedValue, _ := json.Marshal(value)
+
     return http.Cookie{
         Name: fmt.Sprintf("%s", name),
-        Value: value,
+        Value: base64.StdEncoding.EncodeToString(encodedValue),
         Path: path,
         MaxAge: maxage,
         HttpOnly: true,
@@ -54,6 +61,22 @@ func (t *Token) Secret() string {
     return t.secret
 }
 
+func (t *Token) Subject() string {
+    return t.subject
+}
+
+func GenerateRefreshString() string {
+    salt := make([]byte, 16)
+    hash := sha256.New()
+    now := fmt.Sprintf("%d", time.Now().UnixMilli())
+
+    rand.Read(salt)
+    hash.Write([]byte(now))
+    hash.Write(salt)
+
+    return base64.StdEncoding.EncodeToString(hash.Sum(nil))
+}
+
 // TODO: Add ability to pass custom claims
 func GetParsedJWT(value string, secret string) (*jwt.Token, error) {
     token, err := jwt.ParseWithClaims(value, &jwt.RegisteredClaims{}, func(t *jwt.Token) (interface{}, error) { return []byte(secret), nil })
@@ -66,19 +89,8 @@ func GetParsedJWT(value string, secret string) (*jwt.Token, error) {
 
 // TODO: Add ability to pass custom claims
 func (t *Token) Create(issuer string) error {
-    salt := make([]byte, 16)
-    hash := sha256.New()
-    now := fmt.Sprintf("%d", time.Now().UnixMilli())
-
-    rand.Read(salt)
-    hash.Write([]byte(t.subject))
-    hash.Write([]byte(issuer))
-    hash.Write([]byte(now))
-    hash.Write(salt)
-
     encodedSubject, err := json.Marshal(&Subject{
         Value: t.subject,
-        RefreshToken: string(hash.Sum(nil)),
     })
 
     if err != nil {

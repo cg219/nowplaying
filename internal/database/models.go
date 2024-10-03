@@ -21,6 +21,12 @@ type Scrobble struct {
 	Mbid        sql.NullString
 }
 
+type Session struct {
+	Accesstoken  string
+	Refreshtoken string
+	Valid        sql.NullInt64
+}
+
 type User struct {
 	ID                  int64
 	Username            string

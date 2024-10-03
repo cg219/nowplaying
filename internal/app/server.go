@@ -85,7 +85,6 @@ func return500(w http.ResponseWriter) {
 }
 
 func (s *Server) handle(h ...CandlerFunc) http.Handler {
-
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         for _, currentHandler := range h {
             if err := currentHandler(w, r); err != nil {
@@ -156,8 +155,17 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) error {
         return fmt.Errorf(INTERNAL_ERROR)
     }
 
-    token := webtoken.NewToken("nowplaying-au", body.Username, "notsecure", time.Now().Add(time.Hour * 1))
-    cookie := webtoken.NewCookie("nowplaying", token.Value(), "/", int(time.Hour * 24 * 30))
+    accessToken := webtoken.NewToken("accessToken", body.Username, "notsecure", time.Now().Add(time.Hour * 1))
+    refreshToken := webtoken.NewToken("refreshToken", webtoken.GenerateRefreshString(), "notsecure", time.Now().Add(time.Hour * 24 * 30))
+    accessToken.Create("nowplaying")
+    refreshToken.Create("nowplaying")
+    cookieValue := webtoken.CookieAuthValue{ AccessToken: accessToken.Value(), RefreshToken: refreshToken.Value() }
+    cookie := webtoken.NewAuthCookie("nowplaying", "/", cookieValue, int(time.Hour * 24 * 30))
+
+    s.authCfg.database.SaveUserSession(r.Context(), database.SaveUserSessionParams{
+        Accesstoken: accessToken.Value(),
+        Refreshtoken: refreshToken.Subject(),
+    })
 
     http.SetCookie(w, &cookie)
     encode[SuccessResp](w, http.StatusOK, SuccessResp{ Success: true })
@@ -196,8 +204,17 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) error {
         return fmt.Errorf(AUTH_ERROR)
     }
 
-    token := webtoken.NewToken("nowplaying-au", body.Username, "notsecure", time.Now().Add(time.Hour * 1))
-    cookie := webtoken.NewCookie("nowplaying", token.Value(), "/", int(time.Hour * 24 * 30))
+    accessToken := webtoken.NewToken("accessToken", body.Username, "notsecure", time.Now().Add(time.Hour * 1))
+    refreshToken := webtoken.NewToken("refreshToken", webtoken.GenerateRefreshString(), "notsecure", time.Now().Add(time.Hour * 24 * 30))
+    accessToken.Create("nowplaying")
+    refreshToken.Create("nowplaying")
+    cookieValue := webtoken.CookieAuthValue{ AccessToken: accessToken.Value(), RefreshToken: refreshToken.Value() }
+    cookie := webtoken.NewAuthCookie("nowplaying", "/", cookieValue, int(time.Hour * 24 * 30))
+
+    s.authCfg.database.SaveUserSession(r.Context(), database.SaveUserSessionParams{
+        Accesstoken: accessToken.Value(),
+        Refreshtoken: refreshToken.Subject(),
+    })
 
     http.SetCookie(w, &cookie)
     encode[SuccessResp](w, http.StatusOK, SuccessResp{ Success: true })
