@@ -172,8 +172,8 @@ func (q *Queries) SaveLastFMSession(ctx context.Context, arg SaveLastFMSessionPa
 }
 
 const saveScrobble = `-- name: SaveScrobble :exec
-INSERT INTO scrobbles(artist_name, track_name, album_name, album_artist, mbid, track_number, duration, timestamp, source)
-VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO scrobbles(artist_name, track_name, album_name, album_artist, mbid, track_number, duration, timestamp, source, uid)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type SaveScrobbleParams struct {
@@ -186,6 +186,7 @@ type SaveScrobbleParams struct {
 	Duration    int64
 	Timestamp   int64
 	Source      sql.NullString
+	Uid         int64
 }
 
 func (q *Queries) SaveScrobble(ctx context.Context, arg SaveScrobbleParams) error {
@@ -199,6 +200,7 @@ func (q *Queries) SaveScrobble(ctx context.Context, arg SaveScrobbleParams) erro
 		arg.Duration,
 		arg.Timestamp,
 		arg.Source,
+		arg.Uid,
 	)
 	return err
 }

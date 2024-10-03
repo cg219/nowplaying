@@ -19,6 +19,7 @@ type Scrobble struct {
 	Timestamp   int64
 	Source      sql.NullString
 	Mbid        sql.NullString
+	Uid         int64
 }
 
 type Session struct {

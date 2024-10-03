@@ -11,3 +11,4 @@ spotify:
   redirect: redirect uri
 app:
   name: app username
+  id: app user id

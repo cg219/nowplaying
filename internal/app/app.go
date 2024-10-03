@@ -32,6 +32,7 @@ type Config struct {
     } `yaml:"spotify"`
     App struct {
         Name string `yaml:"name"`
+        Id int `yaml:"id"`
     } `yaml:"app"`
 }
 
@@ -140,6 +141,7 @@ func Run(config Config) error {
                     Duration: v.Duration,
                     TrackNumber: fmt.Sprintf("%d", v.TrackNumber),
                     Source: "spotify-local",
+                    Uid: cfg.config.App.Id,
                 }) 
             }
         }

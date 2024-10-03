@@ -25,6 +25,7 @@ type Scrobble struct {
     Mbid string
     Source string
     Duration int
+    Uid int
 }
 
 func NewScrobbler(u string, db *database.Queries) *Scrobbler {
@@ -90,6 +91,7 @@ func scrobbleToParams(sc Scrobble) database.SaveScrobbleParams {
         Mbid: sql.NullString{ String: sc.Mbid, Valid: sc.Mbid != "" },
         TrackNumber: sql.NullString{ String: sc.TrackNumber, Valid: sc.TrackNumber != "" },
         Duration: int64(sc.Duration),
+        Uid: int64(sc.Uid),
     }
 }
 
