@@ -29,6 +29,7 @@ type Spotify struct {
     client *http.Client
     db *database.Queries
     retrying bool
+    Id int
 }
 
 type SpotifyConfig struct {
@@ -86,6 +87,12 @@ type SpotifyPlayingErrorResp struct {
     } `json:"error"`
 }
 
+type SpotifyEncoded struct {
+    Username string `json:"u"`
+    Duration int `json:"d"`
+    Retrying bool `json:"r"`
+}
+
 func NewSpotify(u string, c SpotifyConfig, db *database.Queries) *Spotify {
     return &Spotify{
         client: &http.Client{
@@ -97,6 +104,19 @@ func NewSpotify(u string, c SpotifyConfig, db *database.Queries) *Spotify {
         config: c,
         retrying: false,
     }
+}
+
+func NewSpotifyFromEncoded(encoded []byte, c SpotifyConfig, db *database.Queries) *Spotify {
+    s := &Spotify{
+        client: &http.Client{
+            Timeout: time.Second * 10,
+        },
+        db: db,
+        config: c,
+    }
+
+    s.Decode(encoded)
+    return s
 }
 
 func NewSpotifySongFromResp(resp SpotifyPlayingResp) *SpotifySong {
@@ -127,6 +147,27 @@ func NewSpotifySongFromResp(resp SpotifyPlayingResp) *SpotifySong {
 
 func (s *Spotify) SetAuthCode(code string) {
     s.creds.AuthCode = code
+}
+
+func (s *Spotify) Encode() []byte {
+    data := &SpotifyEncoded{ Username: s.Username, Retrying: s.retrying,  Duration: int(s.Duration.Milliseconds()) }
+
+    encoded, _ := json.Marshal(data)
+    return encoded
+}
+
+func (s *Spotify) Decode(encoded []byte) error {
+    var data SpotifyEncoded
+    err := json.Unmarshal(encoded, &data)
+    if err != nil {
+        return fmt.Errorf("unmarshal fail: ", err)
+    }
+
+    s.Username = data.Username
+    s.Duration = time.Duration(data.Duration)
+    s.retrying = data.Retrying
+
+    return nil
 }
 
 func (s *Spotify) Listen(ctx context.Context, out *chan any) error {

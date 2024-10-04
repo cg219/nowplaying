@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -13,6 +15,7 @@ type Scrobbler struct {
     Username string
     Duration time.Duration
     db *database.Queries
+    Id int
 }
 
 type Scrobble struct {
@@ -28,12 +31,23 @@ type Scrobble struct {
     Uid int
 }
 
+type ScrobbleEncoded struct {
+    Username string `json:"u"`
+    Duration int `json:"d"`
+}
+
 func NewScrobbler(u string, db *database.Queries) *Scrobbler {
     return &Scrobbler{
         Username: u,
         db: db,
         Duration: time.Second * 15,
     }
+}
+
+func NewScrobblerFromEncoded(encoded []byte, db *database.Queries) *Scrobbler {
+    s := &Scrobbler{ db: db }
+    s.Decode(encoded)
+    return s
 }
 
 func (s *Scrobbler) Listen(ctx context.Context, out *chan any) error {
@@ -54,6 +68,25 @@ func (s *Scrobbler) Listen(ctx context.Context, out *chan any) error {
             }
         }
     }
+}
+
+func (s *Scrobbler) Encode() []byte {
+    data := &ScrobbleEncoded{ Username: s.Username, Duration: int(s.Duration.Milliseconds()) }
+    encoded, _ := json.Marshal(data)
+    return encoded
+}
+
+func (s *Scrobbler) Decode(encoded []byte) error {
+    var data ScrobbleEncoded
+    err := json.Unmarshal(encoded, &data)
+    if err != nil {
+        return fmt.Errorf("unmarshal fail: ", err)
+    }
+
+    s.Username = data.Username
+    s.Duration = time.Duration(data.Duration)
+
+    return nil
 }
 
 func (s *Scrobbler) Auth(ctx context.Context) error {

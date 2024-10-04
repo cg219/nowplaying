@@ -50,6 +50,8 @@ type AuthCfg struct {
 type Session interface {
     AuthWithDB(context.Context) error
     Listen(context.Context, *chan any) error
+    Encode()
+    Decode()
 }
 
 func Run(config Config) error {
