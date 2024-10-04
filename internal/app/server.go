@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"strings"
 	"time"
@@ -370,6 +371,10 @@ func StartServer(cfg *AuthCfg) error {
     srv := NewServer(cfg)
 
     addRoutes(srv)
+
+    go func() {
+        http.ListenAndServe("localhost:3005", nil)
+    }()
 
     return http.ListenAndServe("localhost:3006", srv.mux)
 }
