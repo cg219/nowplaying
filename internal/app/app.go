@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
@@ -50,8 +51,8 @@ type AuthCfg struct {
 type Session interface {
     AuthWithDB(context.Context) error
     Listen(context.Context, *chan any) error
-    Encode()
-    Decode()
+    Encode() []byte
+    Decode([]byte) error
 }
 
 func Run(config Config) error {
@@ -97,6 +98,7 @@ func Run(config Config) error {
         return err
     }
 
+
     for _, r := range results {
         log.Println("goose: %s, %s", r.Source.Path, r.Duration)
     }
@@ -107,14 +109,33 @@ func Run(config Config) error {
         StartServer(cfg)
     }()
 
+    encodedSessions, err := cfg.database.GetActiveMusicSessions(cfg.ctx)
+    if err != nil {
+        return err
+    }
+
+    sessions := []Session{}
+
+    for _, es := range encodedSessions {
+        d, _ := base64.StdEncoding.DecodeString(es.Data)
+
+        switch es.Type {
+        case "spotify":
+            s := NewSpotifyFromEncoded(d, SpotifyConfig(cfg.config.Spotify), cfg.database)
+            s.Id = int(es.ID)
+            sessions = append(sessions, s)
+        case `applemusic`:
+            fmt.Println("Apple Music: ")
+        }
+    }
 
     // lastfm := NewLastFM(cfg.config.App.Name, LastFMConfig(cfg.config.LastFM), cfg.database)
-    spotify := NewSpotify(cfg.config.App.Name, SpotifyConfig(cfg.config.Spotify), cfg.database)
-    scrobbler := NewScrobbler(cfg.config.App.Name, cfg.database)
+    // spotify := NewSpotify(cfg.config.App.Name, SpotifyConfig(cfg.config.Spotify), cfg.database)
+    // scrobbler := NewScrobbler(cfg.config.App.Name, cfg.database)
     yts := NewYoutube(cfg.ctx)
     exit := make(chan struct{})
     output := make(chan any)
-    sessions := []Session{ spotify, scrobbler }
+    // sessions := []Session{ spotify, scrobbler }
     defer close(output)
     defer close(exit)
 
@@ -132,19 +153,22 @@ func Run(config Config) error {
     go func() {
         for v := range output {
             switch v := v.(type) {
-            case *SpotifySong:
-                log.Printf("Music URL: %s\n", yts.Search(fmt.Sprintf("%s - %s", v.Artist, v.Name)))
+            case SpotifyListenValue:
+                log.Printf("Music URL: %s\n", yts.Search(fmt.Sprintf("%s - %s", v.Song.Artist, v.Song.Name)))
+                user, _ := cfg.database.GetUser(cfg.ctx, v.Username)
+                scrobbler := NewScrobbler(v.Username, cfg.database)
                 scrobbler.Scrobble(context.Background(), Scrobble{
-                    ArtistName: v.Artist,
-                    TrackName: v.Name,
-                    AlbumName: v.Album.Name,
-                    AlbumArtist: v.Album.Artist,
-                    Timestamp: v.Timestamp,
-                    Duration: v.Duration,
-                    TrackNumber: fmt.Sprintf("%d", v.TrackNumber),
+                    ArtistName: v.Song.Artist,
+                    TrackName: v.Song.Name,
+                    AlbumName: v.Song.Album.Name,
+                    AlbumArtist: v.Song.Album.Artist,
+                    Timestamp: v.Song.Timestamp,
+                    Duration: v.Song.Duration,
+                    TrackNumber: fmt.Sprintf("%d", v.Song.TrackNumber),
                     Source: "spotify-local",
-                    Uid: cfg.config.App.Id,
+                    Uid: int(user.ID),
                 }) 
+
             }
         }
     }()

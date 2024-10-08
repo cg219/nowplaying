@@ -67,3 +67,20 @@ VALUES(?, ?);
 UPDATE sessions
 SET valid = 0
 WHERE accessToken = ? AND refreshToken = ?;
+
+-- name: SaveMusicSession :exec
+INSERT INTO music_sessions(data, type, active, uid)
+VALUES(?, ?, ?, ?);
+
+-- name: GetActiveMusicSessions :many
+SELECT id, data, type, active
+FROM music_sessions;
+
+-- name: RemoveInactiveMusicSessions :exec
+DELETE FROM music_sessions
+WHERE active = 0;
+
+-- name: DeactivateMusicSession :exec
+UPDATE music_sessions
+SET active = 0
+WHERE id = ?;

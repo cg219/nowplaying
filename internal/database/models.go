@@ -8,6 +8,14 @@ import (
 	"database/sql"
 )
 
+type MusicSession struct {
+	ID     int64
+	Data   string
+	Active int64
+	Type   string
+	Uid    int64
+}
+
 type Scrobble struct {
 	ID          int64
 	ArtistName  string

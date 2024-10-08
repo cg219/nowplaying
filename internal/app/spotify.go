@@ -93,6 +93,11 @@ type SpotifyEncoded struct {
     Retrying bool `json:"r"`
 }
 
+type SpotifyListenValue struct {
+    Song *SpotifySong
+    Username string
+}
+
 func NewSpotify(u string, c SpotifyConfig, db *database.Queries) *Spotify {
     return &Spotify{
         client: &http.Client{
@@ -188,7 +193,7 @@ func (s *Spotify) Listen(ctx context.Context, out *chan any) error {
             }
 
             if out != nil && song != nil {
-                *out <- song
+                *out <- SpotifyListenValue{ Song: song, Username: s.Username }
             }
         }
     }
@@ -217,6 +222,22 @@ func (s *Spotify) Auth(ctx context.Context) error {
     return nil
 }
 
+func (s *Spotify) AuthWithDB(ctx context.Context) error {
+    dbSession, err := s.db.GetSpotifySession(ctx, s.Username)
+    if err != nil {
+        log.Printf("Oops: %s\n", err)
+    }
+
+    if !dbSession.SpotifyAccessToken.Valid && !dbSession.SpotifyRefreshToken.Valid {
+        s.Auth(ctx)
+        return nil
+    }
+
+    s.creds.AccessToken = dbSession.SpotifyAccessToken.String
+    s.creds.RefreshToken = dbSession.SpotifyRefreshToken.String
+
+    return nil
+}
 
 func (s *Spotify) GetSpotifyTokens(ctx context.Context) error {
     vals := url.Values{}
@@ -287,23 +308,6 @@ func (s *Spotify) RefreshSpotifyTokens(ctx context.Context) error {
     })
 
     s.creds.AccessToken = data.AccessToken
-    return nil
-}
-
-func (s *Spotify) AuthWithDB(ctx context.Context) error {
-    dbSession, err := s.db.GetSpotifySession(ctx, s.Username)
-    if err != nil {
-        log.Printf("Oops: %s\n", err)
-    }
-
-    if !dbSession.SpotifyAccessToken.Valid && !dbSession.SpotifyRefreshToken.Valid {
-        s.Auth(ctx)
-        return nil
-    }
-
-    s.creds.AccessToken = dbSession.SpotifyAccessToken.String
-    s.creds.RefreshToken = dbSession.SpotifyRefreshToken.String
-
     return nil
 }
 

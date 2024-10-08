@@ -10,6 +10,57 @@ import (
 	"database/sql"
 )
 
+const deactivateMusicSession = `-- name: DeactivateMusicSession :exec
+UPDATE music_sessions
+SET active = 0
+WHERE id = ?
+`
+
+func (q *Queries) DeactivateMusicSession(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deactivateMusicSession, id)
+	return err
+}
+
+const getActiveMusicSessions = `-- name: GetActiveMusicSessions :many
+SELECT id, data, type, active
+FROM music_sessions
+`
+
+type GetActiveMusicSessionsRow struct {
+	ID     int64
+	Data   string
+	Type   string
+	Active int64
+}
+
+func (q *Queries) GetActiveMusicSessions(ctx context.Context) ([]GetActiveMusicSessionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getActiveMusicSessions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetActiveMusicSessionsRow
+	for rows.Next() {
+		var i GetActiveMusicSessionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Data,
+			&i.Type,
+			&i.Active,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLastFMSession = `-- name: GetLastFMSession :one
 SELECT lastfm_session_name, lastfm_session_key
 FROM users
@@ -143,6 +194,16 @@ func (q *Queries) InvalidateUserSession(ctx context.Context, arg InvalidateUserS
 	return err
 }
 
+const removeInactiveMusicSessions = `-- name: RemoveInactiveMusicSessions :exec
+DELETE FROM music_sessions
+WHERE active = 0
+`
+
+func (q *Queries) RemoveInactiveMusicSessions(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, removeInactiveMusicSessions)
+	return err
+}
+
 const removeScrobble = `-- name: RemoveScrobble :exec
 DELETE FROM scrobbles
 WHERE id = ?
@@ -168,6 +229,28 @@ type SaveLastFMSessionParams struct {
 
 func (q *Queries) SaveLastFMSession(ctx context.Context, arg SaveLastFMSessionParams) error {
 	_, err := q.db.ExecContext(ctx, saveLastFMSession, arg.LastfmSessionName, arg.LastfmSessionKey, arg.Username)
+	return err
+}
+
+const saveMusicSession = `-- name: SaveMusicSession :exec
+INSERT INTO music_sessions(data, type, active, uid)
+VALUES(?, ?, ?, ?)
+`
+
+type SaveMusicSessionParams struct {
+	Data   string
+	Type   string
+	Active int64
+	Uid    int64
+}
+
+func (q *Queries) SaveMusicSession(ctx context.Context, arg SaveMusicSessionParams) error {
+	_, err := q.db.ExecContext(ctx, saveMusicSession,
+		arg.Data,
+		arg.Type,
+		arg.Active,
+		arg.Uid,
+	)
 	return err
 }
 

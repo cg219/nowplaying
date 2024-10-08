@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
@@ -79,10 +80,13 @@ func decode[T any](r *http.Request) (T, error) {
 }
 
 func addRoutes(srv *Server) {
+    srv.mux.Handle("GET /", srv.handle(srv.GetLoginPage))
+    srv.mux.Handle("POST /api/login", srv.handle(srv.LogUserIn))
     srv.mux.Handle("GET /auth/spotify-redirect", srv.handle(srv.SpotifyRedirect))
     srv.mux.Handle("POST /auth/register", srv.handle(srv.Register))
     srv.mux.Handle("POST /auth/login", srv.handle(srv.Login))
     srv.mux.Handle("GET /test/x", srv.handle(srv.UserOnly, srv.Test))
+    srv.mux.Handle("GET /settings", srv.handle(srv.UserOnly, srv.GetSettingsPage))
 }
 
 func return500(w http.ResponseWriter) {
@@ -121,6 +125,74 @@ func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     if err := h(w, r); err != nil {
         fmt.Println("OOPS")
     }
+}
+
+func (s *Server) GetLoginPage(w http.ResponseWriter, r *http.Request) error {
+    tmpl := template.Must(template.ParseFiles("templates/pages/auth.html"))
+    tmpl.Execute(w, nil)
+    return nil
+}
+
+func (s *Server) GetSettingsPage(w http.ResponseWriter, r *http.Request) error {
+    tmpl := template.Must(template.ParseFiles("templates/pages/settings.html"))
+    tmpl.Execute(w, nil)
+    return nil
+}
+
+func (s *Server) LogUserIn(w http.ResponseWriter, r *http.Request) error {
+    r.ParseForm()
+
+    username := r.FormValue("username")
+    password := r.FormValue("password")
+
+    if !s.login(r.Context(), username, password) {
+        return fmt.Errorf(AUTH_ERROR)
+    }
+
+    s.setTokens(w, r, username)
+    http.Redirect(w, r, "/settings", http.StatusTemporaryRedirect)
+    s.log.Info("Login from FE", "username", username, "password", password)
+    return nil
+}
+
+func (s *Server) setTokens(w http.ResponseWriter, r *http.Request, username string) {
+    accessToken := webtoken.NewToken("accessToken", username, "notsecure", time.Now().Add(time.Hour * 1))
+    refreshToken := webtoken.NewToken("refreshToken", webtoken.GenerateRefreshString(), "notsecure", time.Now().Add(time.Hour * 24 * 30))
+    accessToken.Create("nowplaying")
+    refreshToken.Create("nowplaying")
+    cookieValue := webtoken.CookieAuthValue{ AccessToken: accessToken.Value(), RefreshToken: refreshToken.Value() }
+    cookie := webtoken.NewAuthCookie("nowplaying", "/", cookieValue, int(time.Hour * 24 * 30))
+
+    s.authCfg.database.SaveUserSession(r.Context(), database.SaveUserSessionParams{
+        Accesstoken: accessToken.Value(),
+        Refreshtoken: refreshToken.Subject(),
+    })
+
+    http.SetCookie(w, &cookie)
+}
+
+func (s *Server) login(ctx context.Context, username string, password string) bool {
+    existingUser, err := s.authCfg.database.GetUserWithPassword(ctx, username)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return false
+        }
+
+        s.log.Error("sql err: %w", err)
+        return false
+    }
+
+    if existingUser.Username == "" {
+        return false 
+    }
+
+    correct, _ := s.hasher.Compare(password, existingUser.Password.(string))
+    if !correct {
+        s.log.Info("Password Mismatch", "password", password)
+        return false
+    }
+
+    return true
 }
 
 func (s *Server) Test(w http.ResponseWriter, r *http.Request) error {
@@ -276,19 +348,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) error {
         return fmt.Errorf(INTERNAL_ERROR)
     }
 
-    accessToken := webtoken.NewToken("accessToken", body.Username, "notsecure", time.Now().Add(time.Hour * 1))
-    refreshToken := webtoken.NewToken("refreshToken", webtoken.GenerateRefreshString(), "notsecure", time.Now().Add(time.Hour * 24 * 30))
-    accessToken.Create("nowplaying")
-    refreshToken.Create("nowplaying")
-    cookieValue := webtoken.CookieAuthValue{ AccessToken: accessToken.Value(), RefreshToken: refreshToken.Value() }
-    cookie := webtoken.NewAuthCookie("nowplaying", "/", cookieValue, int(time.Hour * 24 * 30))
-
-    s.authCfg.database.SaveUserSession(r.Context(), database.SaveUserSessionParams{
-        Accesstoken: accessToken.Value(),
-        Refreshtoken: refreshToken.Subject(),
-    })
-
-    http.SetCookie(w, &cookie)
+    s.setTokens(w, r, body.Username)
     encode[SuccessResp](w, http.StatusOK, SuccessResp{ Success: true })
     s.log.Info("Register Body", body)
     return nil
@@ -305,39 +365,11 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) error {
         return err
     }
 
-    existingUser, err := s.authCfg.database.GetUserWithPassword(r.Context(), body.Username)
-    if err != nil {
-        if err == sql.ErrNoRows {
-            return fmt.Errorf(AUTH_ERROR)
-        }
-
-        s.log.Error("sql err: %w", err)
-        return fmt.Errorf(INTERNAL_ERROR)
-    }
-
-    if existingUser.Username == "" {
-        return  fmt.Errorf(AUTH_ERROR) 
-    }
-
-    correct, _ := s.hasher.Compare(body.Password, existingUser.Password.(string))
-    if !correct {
-        s.log.Info("Password Mismatch", "password", body.Password)
+    if !s.login(r.Context(), body.Username, body.Password) {
         return fmt.Errorf(AUTH_ERROR)
     }
 
-    accessToken := webtoken.NewToken("accessToken", body.Username, "notsecure", time.Now().Add(time.Hour* 1))
-    refreshToken := webtoken.NewToken("refreshToken", webtoken.GenerateRefreshString(), "notsecure", time.Now().Add(time.Hour * 24 * 30))
-    accessToken.Create("nowplaying")
-    refreshToken.Create("nowplaying")
-    cookieValue := webtoken.CookieAuthValue{ AccessToken: accessToken.Value(), RefreshToken: refreshToken.Value() }
-    cookie := webtoken.NewAuthCookie("nowplaying", "/", cookieValue, int(time.Hour * 24 * 30))
-
-    s.authCfg.database.SaveUserSession(r.Context(), database.SaveUserSessionParams{
-        Accesstoken: accessToken.Value(),
-        Refreshtoken: refreshToken.Subject(),
-    })
-
-    http.SetCookie(w, &cookie)
+    s.setTokens(w, r, body.Username)
     encode[SuccessResp](w, http.StatusOK, SuccessResp{ Success: true })
     s.log.Info("Login Body", body)
     return nil
