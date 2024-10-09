@@ -43,6 +43,7 @@ const (
     INTERNAL_ERROR = "Internal Server Error"
     AUTH_ERROR = "Authentication Error"
     USERNAME_EXISTS_ERROR = "Username Exists Error"
+    REDIRECTED_ERROR = "Intentional Redirect Error"
 )
 const (
     CODE_USER_EXISTS = iota
@@ -60,65 +61,14 @@ func NewServer(cfg *AuthCfg) *Server {
     }
 }
 
-func encode[T any](w http.ResponseWriter, status int, v T) error {
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(status)
-    if err := json.NewEncoder(w).Encode(v); err != nil {
-        return fmt.Errorf("encoding: %w", err)
-    }
-
-    return nil
-}
-
-func decode[T any](r *http.Request) (T, error) {
-    var v T
-    if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
-        return v, fmt.Errorf("decoding: %w", err)
-    }
-
-    return v, nil
-}
-
 func addRoutes(srv *Server) {
-    srv.mux.Handle("GET /", srv.handle(srv.GetLoginPage))
+    srv.mux.Handle("GET /", srv.handle(srv.RedirectAuthenticated("/settings"), srv.getLoginPage))
     srv.mux.Handle("POST /api/login", srv.handle(srv.LogUserIn))
     srv.mux.Handle("GET /auth/spotify-redirect", srv.handle(srv.SpotifyRedirect))
     srv.mux.Handle("POST /auth/register", srv.handle(srv.Register))
     srv.mux.Handle("POST /auth/login", srv.handle(srv.Login))
     srv.mux.Handle("GET /test/x", srv.handle(srv.UserOnly, srv.Test))
-    srv.mux.Handle("GET /settings", srv.handle(srv.UserOnly, srv.GetSettingsPage))
-}
-
-func return500(w http.ResponseWriter) {
-    encode[ResponseError](w, 500, ResponseError{ Success: false, Messaage: INTERNAL_ERROR, Code: INTERNAL_SERVER_ERROR })
-}
-
-func (s *Server) handle(h ...CandlerFunc) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        for _, currentHandler := range h {
-            if err := currentHandler(w, r); err != nil {
-                switch err.Error() {
-                case USERNAME_EXISTS_ERROR:
-                    if err := encode[ResponseError](w, 409, ResponseError{ Success: false, Messaage: "Username Taken", Code: CODE_USER_EXISTS }); err != nil {
-                       return500(w)
-                    }
-                    return
-
-                case AUTH_ERROR:
-                    if err := encode[ResponseError](w, 404, ResponseError{ Success: false, Messaage: "Username/Password Incorrect", Code: AUTH_FAIL }); err != nil {
-                        return500(w)
-                    }
-                    return
-                    
-                case INTERNAL_ERROR:
-                    return500(w)
-                    return
-                }
-
-                s.log.Error("Uncaught Error", err)
-            }
-        }
-    })
+    srv.mux.Handle("GET /settings", srv.handle(srv.UserOnly, srv.getSettingsPage))
 }
 
 func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -127,31 +77,22 @@ func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-func (s *Server) GetLoginPage(w http.ResponseWriter, r *http.Request) error {
+func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
+    ats, _ := s.getAuthGookie(r)
+
+    if ats != "" {
+        http.Redirect(w, r, "/settings", http.StatusSeeOther)
+        return nil
+    }
+
     tmpl := template.Must(template.ParseFiles("templates/pages/auth.html"))
     tmpl.Execute(w, nil)
     return nil
 }
 
-func (s *Server) GetSettingsPage(w http.ResponseWriter, r *http.Request) error {
+func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
     tmpl := template.Must(template.ParseFiles("templates/pages/settings.html"))
     tmpl.Execute(w, nil)
-    return nil
-}
-
-func (s *Server) LogUserIn(w http.ResponseWriter, r *http.Request) error {
-    r.ParseForm()
-
-    username := r.FormValue("username")
-    password := r.FormValue("password")
-
-    if !s.login(r.Context(), username, password) {
-        return fmt.Errorf(AUTH_ERROR)
-    }
-
-    s.setTokens(w, r, username)
-    http.Redirect(w, r, "/settings", http.StatusTemporaryRedirect)
-    s.log.Info("Login from FE", "username", username, "password", password)
     return nil
 }
 
@@ -169,6 +110,36 @@ func (s *Server) setTokens(w http.ResponseWriter, r *http.Request, username stri
     })
 
     http.SetCookie(w, &cookie)
+}
+
+func (s *Server) authenticateRequest(r *http.Request, username string) {
+    ctx := context.WithValue(r.Context(), "username", username)
+    updatedRequest := r.WithContext(ctx)
+
+    *r = *updatedRequest
+}
+
+func (s *Server) getAuthGookie(r *http.Request) (string, string) {
+    cookie, err := r.Cookie("nowplaying")
+    if err != nil {
+        s.log.Error("Cookie Retrieval", "cookie", "nowplaying", "method", "UserOnly", "request", r, "error", err.Error())
+        return "", ""
+    }
+
+    value, err := base64.StdEncoding.DecodeString(cookie.Value)
+    if err != nil {
+        s.log.Error("Base64 Decoding", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
+        return "", ""
+    }
+
+    var cookieValue webtoken.CookieAuthValue
+    err = json.Unmarshal(value, &cookieValue)
+    if err != nil {
+        s.log.Error("Invalid Cookie Value", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
+        return "", ""
+    }
+
+    return cookieValue.AccessToken, cookieValue.RefreshToken
 }
 
 func (s *Server) login(ctx context.Context, username string, password string) bool {
@@ -195,57 +166,43 @@ func (s *Server) login(ctx context.Context, username string, password string) bo
     return true
 }
 
-func (s *Server) Test(w http.ResponseWriter, r *http.Request) error {
-    type TestResp struct {
-        SuccessResp
-        Value string `json:"value"`
-    }
+func (s* Server) refreshAccessToken(ctx context.Context, refresh, username string, w http.ResponseWriter) {
+    accessToken := webtoken.NewToken("accessToken", username, "notsecure", time.Now().Add(time.Hour * 1))
+    refreshToken := webtoken.NewToken("refreshToken", refresh, "notsecure", time.Now().Add(time.Hour * 24 * 30))
+    accessToken.Create("nowplaying")
+    refreshToken.Create("nowplaying")
+    cookieValue := webtoken.CookieAuthValue{ AccessToken: accessToken.Value(), RefreshToken: refreshToken.Value() }
+    cookie := webtoken.NewAuthCookie("nowplaying", "/", cookieValue, int(time.Hour * 24 * 30))
 
-    resp := TestResp{ Value: r.Context().Value("username").(string)}
-    resp.Success = true
-    encode[TestResp](w, http.StatusOK, resp)
-    return nil
+    s.authCfg.database.SaveUserSession(ctx, database.SaveUserSessionParams{
+        Accesstoken: accessToken.Value(),
+        Refreshtoken: refreshToken.Subject(),
+    })
+
+    http.SetCookie(w, &cookie)
+    s.log.Info("Refresh User Tokens", "username", username)
 }
 
-func (s *Server) UserOnly(w http.ResponseWriter, r *http.Request) error {
+func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, string, func(http.ResponseWriter)) {
     accessTokenExpired := true
     refreshTokenExpired := true
-    cookie, err := r.Cookie("nowplaying")
-    if err != nil {
-        s.log.Error("Cookie Retrieval", "cookie", "nowplaying", "method", "UserOnly", "request", r, "error", err.Error())
-        return fmt.Errorf(AUTH_ERROR)
-    }
-
-    value, err := base64.StdEncoding.DecodeString(cookie.Value)
-    if err != nil {
-        s.log.Error("Base64 Decoding", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
-        return fmt.Errorf(AUTH_ERROR)
-    }
-
-    var cookieValue webtoken.CookieAuthValue
-    err = json.Unmarshal(value, &cookieValue)
-    if err != nil {
-        s.log.Error("Invalid Cookie Value", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
-        return fmt.Errorf(AUTH_ERROR)
-    }
-
-    accessToken, err := webtoken.GetParsedJWT(cookieValue.AccessToken, "notsecure")
+    accessToken, err := webtoken.GetParsedJWT(ats, "notsecure")
     if err != nil {
         fmt.Println()
 
         if !strings.Contains(err.Error(), jwt.ErrTokenExpired.Error()) {
-            s.log.Error("Invalid AccessToken", "accessToken", cookieValue.AccessToken, "method", "UserOnly", "request", r, "error", err.Error())
-            return fmt.Errorf(AUTH_ERROR)
+            s.log.Error("Invalid AccessToken", "accessToken", ats, "method", "UserOnly", "error", err.Error())
+            return false, "", nil
         }
     } else {
         accessTokenExpired = false
     }
 
-    refreshToken, err := webtoken.GetParsedJWT(cookieValue.RefreshToken, "notsecure")
+    refreshToken, err := webtoken.GetParsedJWT(rts, "notsecure")
     if err != nil {
         if !strings.Contains(err.Error(), jwt.ErrTokenExpired.Error()) {
-            s.log.Error("Invalid RefreshToken", "refreshToken", cookieValue.RefreshToken, "method", "UserOnly", "request", r, "error", err.Error())
-            return fmt.Errorf(AUTH_ERROR)
+            s.log.Error("Invalid RefreshToken", "refreshToken", rts, "method", "UserOnly", "error", err.Error())
+            return false, "", nil
         }
     } else {
         refreshTokenExpired = false
@@ -253,62 +210,60 @@ func (s *Server) UserOnly(w http.ResponseWriter, r *http.Request) error {
 
     rfs, err := refreshToken.Claims.GetSubject()
     if err != nil {
-        s.log.Error("Invalid RefreshToken", "method", "UserOnly", "request", r, "error", err.Error())
-        return fmt.Errorf(AUTH_ERROR)
+        s.log.Error("Invalid RefreshToken", "method", "UserOnly", "error", err.Error())
+        return false, "", nil
     }
 
     var rf webtoken.Subject
     err = json.Unmarshal([]byte(rfs), &rf)
     if err != nil {
-        s.log.Error("Invalid RefreshToken", "refreshToken", rfs, "method", "UserOnly", "request", r, "error", err.Error())
-        return fmt.Errorf(AUTH_ERROR)
+        s.log.Error("Invalid RefreshToken", "refreshToken", rfs, "method", "UserOnly", "error", err.Error())
+        return false, "", nil
     }
 
     if refreshTokenExpired {
-        s.log.Error("Expired RefreshToken", "refreshToken", cookieValue.RefreshToken, "method", "UserOnly", "request", r)
-        s.authCfg.database.InvalidateUserSession(r.Context(), database.InvalidateUserSessionParams{
-            Accesstoken: cookieValue.AccessToken,
+        s.log.Error("Expired RefreshToken", "refreshToken", rts, "method", "UserOnly")
+        s.authCfg.database.InvalidateUserSession(ctx, database.InvalidateUserSessionParams{
+            Accesstoken: ats,
             Refreshtoken: rf.Value,
         })
-        return fmt.Errorf(AUTH_ERROR)
+        return false, "", nil
     }
 
-    _, err = s.authCfg.database.GetUserSession(r.Context(), database.GetUserSessionParams{
-        Accesstoken: cookieValue.AccessToken,
+    _, err = s.authCfg.database.GetUserSession(ctx, database.GetUserSessionParams{
+        Accesstoken: ats,
         Refreshtoken: rf.Value,
     })
     if err != nil {
-        s.log.Error("Retreiving User Session", "method", "UserOnly", "request", r, "error", err.Error())
-        return fmt.Errorf(AUTH_ERROR)
+        s.log.Error("Retreiving User Session", "method", "UserOnly", "error", err.Error())
+        return false, "", nil
     }
 
     us, err := accessToken.Claims.GetSubject()
     if err != nil {
-        s.log.Error("Invalid AccessToken", "method", "UserOnly", "request", r, "error", err.Error())
-        return fmt.Errorf(AUTH_ERROR)
+        s.log.Error("Invalid AccessToken", "method", "UserOnly", "error", err.Error())
+        return false, "", nil
     }
 
     var username webtoken.Subject
     err = json.Unmarshal([]byte(us), &username)
     if err != nil {
-        s.log.Error("Invalid AccessToken", "accessToken", us, "method", "UserOnly", "request", r, "error", err.Error())
-        return fmt.Errorf(AUTH_ERROR)
+        s.log.Error("Invalid AccessToken", "accessToken", us, "method", "UserOnly", "error", err.Error())
+        return false, "", nil
     }
 
     if accessTokenExpired {
-        s.log.Error("Expired AccessToken", "accessToken", cookieValue.AccessToken, "method", "UserOnly", "request", r )
-        s.authCfg.database.InvalidateUserSession(r.Context(), database.InvalidateUserSessionParams{
-            Accesstoken: cookieValue.AccessToken,
+        s.log.Error("Expired AccessToken", "accessToken", ats, "method", "UserOnly")
+        s.authCfg.database.InvalidateUserSession(ctx, database.InvalidateUserSessionParams{
+            Accesstoken: ats,
             Refreshtoken: rf.Value,
         })
-        s.RefreshAccessToken(r.Context(), rf.Value, username.Value, w)
+
+        refreshFunc := func(w http.ResponseWriter) { s.refreshAccessToken(ctx, rf.Value, username.Value, w) }
+        return false, username.Value, refreshFunc
     }
 
-    ctx := context.WithValue(r.Context(), "username", username.Value)
-    updatedRequest := r.WithContext(ctx)
-
-    *r = *updatedRequest
-    return nil
+    return true, username.Value, nil
 }
 
 func (s *Server) Register(w http.ResponseWriter, r *http.Request) error {
@@ -372,30 +327,6 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) error {
     s.setTokens(w, r, body.Username)
     encode[SuccessResp](w, http.StatusOK, SuccessResp{ Success: true })
     s.log.Info("Login Body", body)
-    return nil
-}
-
-func (s* Server) RefreshAccessToken(ctx context.Context, refresh, username string, w http.ResponseWriter) {
-    accessToken := webtoken.NewToken("accessToken", username, "notsecure", time.Now().Add(time.Hour * 1))
-    refreshToken := webtoken.NewToken("refreshToken", refresh, "notsecure", time.Now().Add(time.Hour * 24 * 30))
-    accessToken.Create("nowplaying")
-    refreshToken.Create("nowplaying")
-    cookieValue := webtoken.CookieAuthValue{ AccessToken: accessToken.Value(), RefreshToken: refreshToken.Value() }
-    cookie := webtoken.NewAuthCookie("nowplaying", "/", cookieValue, int(time.Hour * 24 * 30))
-
-    s.authCfg.database.SaveUserSession(ctx, database.SaveUserSessionParams{
-        Accesstoken: accessToken.Value(),
-        Refreshtoken: refreshToken.Subject(),
-    })
-
-    http.SetCookie(w, &cookie)
-    s.log.Info("Refresh User Tokens", "username", username)
-}
-
-func (s *Server) SpotifyRedirect(w http.ResponseWriter, r *http.Request) error {
-    s.authCfg.SpotifySession.SetAuthCode(r.URL.Query().Get("code"))
-    s.authCfg.SpotifySession.GetSpotifyTokens(r.Context())
-    fmt.Println(r.URL.Query())
     return nil
 }
 

@@ -3,18 +3,26 @@
         <title>Now Playing</title>
         <script src="https://unpkg.com/htmx.org@2.0.2" integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ" crossorigin="anonymous"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css" integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.cyan.min.css">
         <!-- <link rel="stylesheet" href="/sf/styles.css"> -->
     </head>
     <body>
-        <h1>Now Playing</h1>
-        <section>
-            <h1>Login</h1>
-            <form id="login" hx-post="/api/login" hx-boost="true">
-                <input type="text" name="username" placeholder="Enter Username" />
-                <input type="text" name="password" placeholder="Enter Password" />
-                <button type="submit">Login</button>
-            </form>
-        </section>
+        <main class="container">
+            <header>
+                <hgroup>
+                    <h1>Now Playing</h1>
+                    <p>Track and Share what you're listening to</p>
+                </hgroup>
+            </header>
+            <section>
+                <h1>Login</h1>
+                <form class="container" id="login" method="POST" action="/api/login" hx-boost="true">
+                    <input type="text" name="username" placeholder="Username" />
+                    <input type="password" name="password" placeholder="Password" />
+                    <button type="submit">Login</button>
+                </form>
+            </section>
+        </main>
 
         <!-- <script src="/sf/webauthn.js"></script> -->
         <!-- <script src="/sf/auth.js"></script> -->
