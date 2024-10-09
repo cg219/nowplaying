@@ -74,7 +74,13 @@ VALUES(?, ?, ?, ?);
 
 -- name: GetActiveMusicSessions :many
 SELECT id, data, type, active
-FROM music_sessions;
+FROM music_sessions
+WHERE active = 1;
+
+-- name: GetUserMusicSessions :many
+SELECT id, data, type, active
+FROM music_sessions
+WHERE uid = ?;
 
 -- name: RemoveInactiveMusicSessions :exec
 DELETE FROM music_sessions

@@ -24,6 +24,7 @@ func (q *Queries) DeactivateMusicSession(ctx context.Context, id int64) error {
 const getActiveMusicSessions = `-- name: GetActiveMusicSessions :many
 SELECT id, data, type, active
 FROM music_sessions
+WHERE active = 1
 `
 
 type GetActiveMusicSessionsRow struct {
@@ -139,6 +140,47 @@ func (q *Queries) GetUser(ctx context.Context, username string) (GetUserRow, err
 	var i GetUserRow
 	err := row.Scan(&i.ID, &i.Username)
 	return i, err
+}
+
+const getUserMusicSessions = `-- name: GetUserMusicSessions :many
+SELECT id, data, type, active
+FROM music_sessions
+WHERE uid = ?
+`
+
+type GetUserMusicSessionsRow struct {
+	ID     int64
+	Data   string
+	Type   string
+	Active int64
+}
+
+func (q *Queries) GetUserMusicSessions(ctx context.Context, uid int64) ([]GetUserMusicSessionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserMusicSessions, uid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserMusicSessionsRow
+	for rows.Next() {
+		var i GetUserMusicSessionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Data,
+			&i.Type,
+			&i.Active,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUserSession = `-- name: GetUserSession :one
