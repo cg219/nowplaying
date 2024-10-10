@@ -129,13 +129,9 @@ func Run(config Config) error {
         }
     }
 
-    // lastfm := NewLastFM(cfg.config.App.Name, LastFMConfig(cfg.config.LastFM), cfg.database)
-    // spotify := NewSpotify(cfg.config.App.Name, SpotifyConfig(cfg.config.Spotify), cfg.database)
-    // scrobbler := NewScrobbler(cfg.config.App.Name, cfg.database)
     yts := NewYoutube(cfg.ctx)
     exit := make(chan struct{})
     output := make(chan any)
-    // sessions := []Session{ spotify, scrobbler }
     defer close(output)
     defer close(exit)
 

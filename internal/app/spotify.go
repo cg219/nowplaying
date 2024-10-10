@@ -104,7 +104,7 @@ func NewSpotify(u string, c SpotifyConfig, db *database.Queries) *Spotify {
             Timeout: time.Second * 10,
         },
         Username: u,
-        Duration: time.Second * 5,
+        Duration: time.Second * 15,
         db: db,
         config: c,
         retrying: false,
