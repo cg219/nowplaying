@@ -41,7 +41,7 @@ func (s *Server) handle(h ...CandlerFunc) http.Handler {
 }
 
 
-func (s *Server) RedirectAuthenticated(redirect string) CandlerFunc {
+func (s *Server) RedirectAuthenticated(redirect string, onAuth bool) CandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) error {
         cookie, err := r.Cookie("nowplaying")
         if err != nil {
@@ -67,14 +67,20 @@ func (s *Server) RedirectAuthenticated(redirect string) CandlerFunc {
                 refresh(w)
             }
             s.authenticateRequest(r, username)
+
+            if onAuth {
+                http.Redirect(w, r, redirect, http.StatusSeeOther)
+                return fmt.Errorf(REDIRECTED_ERROR)
+            }
+        }
+
+        if !onAuth {
             http.Redirect(w, r, redirect, http.StatusSeeOther)
             return fmt.Errorf(REDIRECTED_ERROR)
         }
-
         return nil
     }
 }
-
 
 func (s *Server) UserOnly(w http.ResponseWriter, r *http.Request) error {
     cookie, err := r.Cookie("nowplaying")

@@ -16,17 +16,40 @@
                 </hgroup>
             </header>
             <main>
-                <form hx-post="">
+                <form>
+                    {{if .SpotifyOn}}
                     <fieldset>
                         <label for="spotify-session">Scrobble Spotify</label>
-                        <input type="checkbox" name="spotify-session" role="switch">
+                        <input type="checkbox" name="spotify-session" role="switch" {{ .SpotifyTrack}}>
                     </fieldset>
+                    {{else}}
+                    <fieldset>
+                        <label for="spotify-auth">Allow Spotify Access</label>
+                        <input type="button" name="spotify-auth" value="Authorize with Spotify" />
+                    </fieldset>
+                    {{end}}
                 </form>
             </main>
         </section>
+
+        <script type="text/javascript">
+        htmx.onLoad(() => {
+            htmx.on('input[name="spotify-session"]', "change", async (evt) => {
+                if (evt.target.checked) {
+                    await fetch("/api/spotify", {
+                        method: "POST"
+                    })
+                } else {
+                    await fetch("/api/spotify", {
+                        method: "DELETE"
+                    })
+                }
+                console.log(evt.target.checked)
+            })
+        })
+        </script>
 
         <!-- <script src="/sf/webauthn.js"></script> -->
         <!-- <script src="/sf/auth.js"></script> -->
     </body>
 </html>
-

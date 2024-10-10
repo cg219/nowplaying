@@ -62,8 +62,10 @@ func NewServer(cfg *AuthCfg) *Server {
 }
 
 func addRoutes(srv *Server) {
-    srv.mux.Handle("GET /", srv.handle(srv.RedirectAuthenticated("/settings"), srv.getLoginPage))
+    srv.mux.Handle("GET /", srv.handle(srv.RedirectAuthenticated("/settings", true), srv.getLoginPage))
     srv.mux.Handle("POST /api/login", srv.handle(srv.LogUserIn))
+    srv.mux.Handle("POST /api/spotify", srv.handle(srv.UserOnly, srv.AddSpotify))
+    srv.mux.Handle("DELETE /api/spotify", srv.handle(srv.UserOnly, srv.RemoveSpotify))
     srv.mux.Handle("GET /auth/spotify-redirect", srv.handle(srv.SpotifyRedirect))
     srv.mux.Handle("POST /auth/register", srv.handle(srv.Register))
     srv.mux.Handle("POST /auth/login", srv.handle(srv.Login))
@@ -91,8 +93,40 @@ func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
+    user, err := s.authCfg.database.GetUser(r.Context(), r.Context().Value("username").(string))
+    if err != nil && err != sql.ErrNoRows {
+        return err
+    }
+
+    sessions, err := s.authCfg.database.GetUserMusicSessions(r.Context(), user.ID)
+    if err != nil && err != sql.ErrNoRows {
+        return err
+    }
+
+    spotify, err := s.authCfg.database.GetSpotifySession(r.Context(), r.Context().Value("username").(string))
+    if err != nil && err != sql.ErrNoRows {
+        return err
+    }
+
+    page := &struct{
+        SpotifyTrack string
+        SpotifyOn bool
+    }{}
+
+    if spotify.SpotifyAccessToken.Valid && spotify.SpotifyRefreshToken.Valid {
+        page.SpotifyOn = true
+    }
+
+    for _, v := range sessions {
+        if strings.EqualFold(v.Type, "spotify") {
+            if v.Active == 1 {
+                page.SpotifyTrack = "checked"
+            }
+        }
+    }
+
     tmpl := template.Must(template.ParseFiles("templates/pages/settings.html"))
-    tmpl.Execute(w, nil)
+    tmpl.Execute(w, page)
     return nil
 }
 
