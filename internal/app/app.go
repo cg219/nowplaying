@@ -37,7 +37,7 @@ type Config struct {
     } `yaml:"app"`
 }
 
-type AuthCfg struct {
+type AppCfg struct {
     config Config
     username string
     client *http.Client
@@ -46,6 +46,7 @@ type AuthCfg struct {
     SpotifySession *Spotify
     listenInterval time.Ticker
     database *database.Queries
+    haveNewSessions bool
 }
 
 type Session interface {
@@ -56,7 +57,7 @@ type Session interface {
 }
 
 func Run(config Config) error {
-    cfg := &AuthCfg{
+    cfg := &AppCfg{
         config: config,
         username: config.App.Name,
         client: &http.Client{

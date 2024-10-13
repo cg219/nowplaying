@@ -22,7 +22,7 @@ import (
 
 type Server struct {
     mux *http.ServeMux
-    authCfg *AuthCfg
+    authCfg *AppCfg
     log *slog.Logger
     hasher *argon2id.Argon2id
 }
@@ -52,7 +52,7 @@ const (
     INTERNAL_SERVER_ERROR
 )
 
-func NewServer(cfg *AuthCfg) *Server {
+func NewServer(cfg *AppCfg) *Server {
     return &Server{
         mux: http.NewServeMux(),
         authCfg: cfg,
@@ -131,7 +131,7 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) setTokens(w http.ResponseWriter, r *http.Request, username string) {
-    accessToken := webtoken.NewToken("accessToken", username, "notsecure", time.Now().Add(time.Hour * 1))
+    accessToken := webtoken.NewToken("accessToken", username, "notsecure", time.Now().Add(time.Minute * 3))
     refreshToken := webtoken.NewToken("refreshToken", webtoken.GenerateRefreshString(), "notsecure", time.Now().Add(time.Hour * 24 * 30))
     accessToken.Create("nowplaying")
     refreshToken.Create("nowplaying")
@@ -293,8 +293,9 @@ func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, st
             Refreshtoken: rf.Value,
         })
 
-        refreshFunc := func(w http.ResponseWriter) { s.refreshAccessToken(ctx, rf.Value, username.Value, w) }
-        return false, username.Value, refreshFunc
+        return false, username.Value, func(w http.ResponseWriter) {
+            s.refreshAccessToken(ctx, rf.Value, username.Value, w)
+        }
     }
 
     return true, username.Value, nil
@@ -364,7 +365,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) error {
     return nil
 }
 
-func StartServer(cfg *AuthCfg) error {
+func StartServer(cfg *AppCfg) error {
     srv := NewServer(cfg)
 
     addRoutes(srv)

@@ -1,12 +1,12 @@
 package app
 
 import (
-	"encoding/base64"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	_ "net/http/pprof"
-	"github.com/cg219/nowplaying/pkg/webtoken"
+    "encoding/base64"
+    "encoding/json"
+    "fmt"
+    "net/http"
+    _ "net/http/pprof"
+    "github.com/cg219/nowplaying/pkg/webtoken"
 )
 
 func (s *Server) handle(h ...CandlerFunc) http.Handler {
@@ -16,7 +16,7 @@ func (s *Server) handle(h ...CandlerFunc) http.Handler {
                 switch err.Error() {
                 case USERNAME_EXISTS_ERROR:
                     if err := encode[ResponseError](w, 409, ResponseError{ Success: false, Messaage: "Username Taken", Code: CODE_USER_EXISTS }); err != nil {
-                       return500(w)
+                        return500(w)
                     }
                     return
 
@@ -62,10 +62,17 @@ func (s *Server) RedirectAuthenticated(redirect string, onAuth bool) CandlerFunc
             return nil
         }
 
-        if ok, username, refresh := s.isAuthenticated(r.Context(), cookieValue.AccessToken, cookieValue.RefreshToken); ok {
-            if refresh != nil {
-                refresh(w)
+        ok, username, refresh := s.isAuthenticated(r.Context(), cookieValue.AccessToken, cookieValue.RefreshToken)
+        if ok {
+            s.authenticateRequest(r, username)
+
+            if onAuth {
+                http.Redirect(w, r, redirect, http.StatusSeeOther)
+                return fmt.Errorf(REDIRECTED_ERROR)
             }
+        }
+        if !ok && refresh != nil {
+            refresh(w)
             s.authenticateRequest(r, username)
 
             if onAuth {
@@ -102,14 +109,17 @@ func (s *Server) UserOnly(w http.ResponseWriter, r *http.Request) error {
         return fmt.Errorf(AUTH_ERROR)
     }
 
-    if ok, username, refresh := s.isAuthenticated(r.Context(), cookieValue.AccessToken, cookieValue.RefreshToken); ok {
-        if refresh != nil {
-            refresh(w)
-        }
+    ok, username, refresh := s.isAuthenticated(r.Context(), cookieValue.AccessToken, cookieValue.RefreshToken)
+    if ok {
         s.authenticateRequest(r, username)
-    } else  {
-        return fmt.Errorf(AUTH_ERROR)
+        return nil
     }
 
-    return nil
+    if !ok && refresh != nil {
+        refresh(w)
+        s.authenticateRequest(r, username)
+        return nil
+    }
+
+    return fmt.Errorf(AUTH_ERROR)
 }
