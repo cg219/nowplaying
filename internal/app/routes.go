@@ -27,6 +27,13 @@ func (s *Server) AddSpotify(w http.ResponseWriter, r *http.Request) error {
             if v.Active == 1 {
                 return nil
             }
+
+            err := s.authCfg.database.ActivateMusicSession(r.Context(), v.ID)
+            if err != nil {
+                s.log.Error("Activating Music Session", "Session ID", v.ID, "error", err)
+                return fmt.Errorf(INTERNAL_ERROR)
+            }
+            return nil
         }
     }
 

@@ -90,3 +90,8 @@ WHERE active = 0;
 UPDATE music_sessions
 SET active = 0
 WHERE id = ?;
+
+-- name: ActivateMusicSession :exec
+UPDATE music_sessions
+SET active = 1
+WHERE id = ?;

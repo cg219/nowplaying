@@ -10,6 +10,17 @@ import (
 	"database/sql"
 )
 
+const activateMusicSession = `-- name: ActivateMusicSession :exec
+UPDATE music_sessions
+SET active = 1
+WHERE id = ?
+`
+
+func (q *Queries) ActivateMusicSession(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, activateMusicSession, id)
+	return err
+}
+
 const deactivateMusicSession = `-- name: DeactivateMusicSession :exec
 UPDATE music_sessions
 SET active = 0
