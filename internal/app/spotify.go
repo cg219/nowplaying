@@ -169,7 +169,7 @@ func (s *Spotify) Decode(encoded []byte) error {
     }
 
     s.Username = data.Username
-    s.Duration = time.Duration(data.Duration)
+    s.Duration = time.Duration(data.Duration) * time.Millisecond
     s.retrying = data.Retrying
 
     return nil
