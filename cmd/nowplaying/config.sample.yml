@@ -12,3 +12,6 @@ spotify:
 app:
   name: app username
   id: app user id
+twitter:
+  id: client id
+  secret: client secret
