@@ -104,7 +104,7 @@ func NewSpotify(u string, c SpotifyConfig, db *database.Queries) *Spotify {
             Timeout: time.Second * 10,
         },
         Username: u,
-        Duration: time.Second * 15,
+        Duration: time.Second * 4,
         db: db,
         config: c,
         retrying: false,
@@ -335,10 +335,13 @@ func (s *Spotify) CheckCurrentTrack(ctx context.Context) (*SpotifySong, error) {
             return nil, err
         }
 
+        if data.Actions.Disallows.Paused {
+            return nil, nil
+        }
+
         song := NewSpotifySongFromResp(data)
         s.retrying = false
         log.Printf("Spotify: %s - %s\n", song.Artist, song.Name)
-
         return song, nil
     } else {
         var data SpotifyPlayingErrorResp

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"github.com/cg219/nowplaying/internal/database"
@@ -29,6 +30,7 @@ type Scrobble struct {
     Source string
     Duration int
     Uid int
+    Progress int
 }
 
 type ScrobbleEncoded struct {
@@ -97,20 +99,33 @@ func (s *Scrobbler) AuthWithDB(ctx context.Context) error {
     return nil
 }
 
-func (s *Scrobbler) Scrobble(ctx context.Context, sc Scrobble) error {
+func (s *Scrobbler) Scrobble(ctx context.Context, sc Scrobble) bool {
     dbValue, err := s.db.GetLatestTrack(ctx)
 
     if err == sql.ErrNoRows {
         s.db.SaveScrobble(ctx, scrobbleToParams(sc))
-        return nil
+        return false
     }
 
-    if sc.ArtistName == dbValue.ArtistName && sc.TrackName == dbValue.TrackName && sc.Duration == int(dbValue.Duration) && sc.Timestamp <= int(dbValue.Timestamp + dbValue.Duration) {
-        return nil
+    if sc.ArtistName == dbValue.ArtistName &&
+        sc.TrackName == dbValue.TrackName &&
+        sc.Duration == int(dbValue.Duration) &&
+        sc.Timestamp <= int(dbValue.Timestamp + dbValue.Duration) {
+        return false
+    }
+
+    if sc.Duration > int(time.Duration(time.Second * 30).Milliseconds()) {
+        if sc.Progress < int(time.Duration(time.Second * 30).Milliseconds()) {
+            return false
+        }
+    } else {
+        if float64(sc.Progress) < math.Round(float64(sc.Duration) * .5) {
+            return false
+        }
     }
 
     s.db.SaveScrobble(ctx, scrobbleToParams(sc))
-    return nil
+    return true
 }
 
 func scrobbleToParams(sc Scrobble) database.SaveScrobbleParams {

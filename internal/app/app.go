@@ -151,10 +151,9 @@ func Run(config Config) error {
         for v := range output {
             switch v := v.(type) {
             case SpotifyListenValue:
-                log.Printf("Music URL: %s\n", yts.Search(fmt.Sprintf("%s - %s", v.Song.Artist, v.Song.Name)))
                 user, _ := cfg.database.GetUser(cfg.ctx, v.Username)
                 scrobbler := NewScrobbler(v.Username, cfg.database)
-                scrobbler.Scrobble(context.Background(), Scrobble{
+                if ok := scrobbler.Scrobble(context.Background(), Scrobble{
                     ArtistName: v.Song.Artist,
                     TrackName: v.Song.Name,
                     AlbumName: v.Song.Album.Name,
@@ -164,7 +163,10 @@ func Run(config Config) error {
                     TrackNumber: fmt.Sprintf("%d", v.Song.TrackNumber),
                     Source: "spotify-local",
                     Uid: int(user.ID),
-                }) 
+                    Progress: v.Song.Progress,
+                }); ok {
+                    log.Printf("Music URL: %s\n", yts.Search(fmt.Sprintf("%s - %s", v.Song.Artist, v.Song.Name)))
+                }
 
             }
         }
