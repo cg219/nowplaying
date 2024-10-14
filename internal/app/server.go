@@ -43,7 +43,8 @@ const (
     INTERNAL_ERROR = "Internal Server Error"
     AUTH_ERROR = "Authentication Error"
     USERNAME_EXISTS_ERROR = "Username Exists Error"
-    REDIRECTED_ERROR = "Intentional Redirect Error"
+    GOTO_NEXT_HANDLER_ERROR = "Redirect Error"
+    REDIRECT_ERROR = "Intentional Redirect Error"
 )
 const (
     CODE_USER_EXISTS = iota
@@ -70,7 +71,7 @@ func addRoutes(srv *Server) {
     srv.mux.Handle("POST /auth/register", srv.handle(srv.Register))
     srv.mux.Handle("POST /auth/login", srv.handle(srv.Login))
     srv.mux.Handle("GET /test/x", srv.handle(srv.UserOnly, srv.Test))
-    srv.mux.Handle("GET /settings", srv.handle(srv.UserOnly, srv.getSettingsPage))
+    srv.mux.Handle("GET /settings", srv.handle(srv.RedirectAuthenticated("/", false), srv.getSettingsPage))
 }
 
 func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -80,13 +81,6 @@ func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
-    ats, _ := s.getAuthGookie(r)
-
-    if ats != "" {
-        http.Redirect(w, r, "/settings", http.StatusSeeOther)
-        return nil
-    }
-
     tmpl := template.Must(template.ParseFiles("templates/pages/auth.html"))
     tmpl.Execute(w, nil)
     return nil
@@ -131,7 +125,7 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) setTokens(w http.ResponseWriter, r *http.Request, username string) {
-    accessToken := webtoken.NewToken("accessToken", username, "notsecure", time.Now().Add(time.Minute * 3))
+    accessToken := webtoken.NewToken("accessToken", username, "notsecure", time.Now().Add(time.Hour * 1))
     refreshToken := webtoken.NewToken("refreshToken", webtoken.GenerateRefreshString(), "notsecure", time.Now().Add(time.Hour * 24 * 30))
     accessToken.Create("nowplaying")
     refreshToken.Create("nowplaying")
@@ -200,17 +194,15 @@ func (s *Server) login(ctx context.Context, username string, password string) bo
     return true
 }
 
-func (s* Server) refreshAccessToken(ctx context.Context, refresh, username string, w http.ResponseWriter) {
+func (s* Server) refreshAccessToken(ctx context.Context, refreshExpire int64, refreshTokenString, refreshValue, username string, w http.ResponseWriter) {
     accessToken := webtoken.NewToken("accessToken", username, "notsecure", time.Now().Add(time.Hour * 1))
-    refreshToken := webtoken.NewToken("refreshToken", refresh, "notsecure", time.Now().Add(time.Hour * 24 * 30))
     accessToken.Create("nowplaying")
-    refreshToken.Create("nowplaying")
-    cookieValue := webtoken.CookieAuthValue{ AccessToken: accessToken.Value(), RefreshToken: refreshToken.Value() }
-    cookie := webtoken.NewAuthCookie("nowplaying", "/", cookieValue, int(time.Hour * 24 * 30))
+    cookieValue := webtoken.CookieAuthValue{ AccessToken: accessToken.Value(), RefreshToken: refreshTokenString }
+    cookie := webtoken.NewAuthCookie("nowplaying", "/", cookieValue, int(refreshExpire))
 
     s.authCfg.database.SaveUserSession(ctx, database.SaveUserSessionParams{
         Accesstoken: accessToken.Value(),
-        Refreshtoken: refreshToken.Subject(),
+        Refreshtoken: refreshValue,
     })
 
     http.SetCookie(w, &cookie)
@@ -225,7 +217,7 @@ func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, st
         fmt.Println()
 
         if !strings.Contains(err.Error(), jwt.ErrTokenExpired.Error()) {
-            s.log.Error("Invalid AccessToken", "accessToken", ats, "method", "UserOnly", "error", err.Error())
+            s.log.Error("Invalid AccessToken", "accessToken", ats, "method", "IsAuthenticated", "error", err.Error())
             return false, "", nil
         }
     } else {
@@ -235,7 +227,7 @@ func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, st
     refreshToken, err := webtoken.GetParsedJWT(rts, "notsecure")
     if err != nil {
         if !strings.Contains(err.Error(), jwt.ErrTokenExpired.Error()) {
-            s.log.Error("Invalid RefreshToken", "refreshToken", rts, "method", "UserOnly", "error", err.Error())
+            s.log.Error("Invalid RefreshToken", "refreshToken", rts, "method", "isAuthenticated", "error", err.Error())
             return false, "", nil
         }
     } else {
@@ -244,19 +236,19 @@ func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, st
 
     rfs, err := refreshToken.Claims.GetSubject()
     if err != nil {
-        s.log.Error("Invalid RefreshToken", "method", "UserOnly", "error", err.Error())
+        s.log.Error("Invalid RefreshToken", "method", "isAuthenticated", "error", err.Error())
         return false, "", nil
     }
 
     var rf webtoken.Subject
     err = json.Unmarshal([]byte(rfs), &rf)
     if err != nil {
-        s.log.Error("Invalid RefreshToken", "refreshToken", rfs, "method", "UserOnly", "error", err.Error())
+        s.log.Error("Invalid RefreshToken", "refreshToken", rfs, "method", "isAuthenticated", "error", err.Error())
         return false, "", nil
     }
 
     if refreshTokenExpired {
-        s.log.Error("Expired RefreshToken", "refreshToken", rts, "method", "UserOnly")
+        s.log.Error("Expired RefreshToken", "refreshToken", rts, "method", "isAuthenticated")
         s.authCfg.database.InvalidateUserSession(ctx, database.InvalidateUserSessionParams{
             Accesstoken: ats,
             Refreshtoken: rf.Value,
@@ -269,32 +261,34 @@ func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, st
         Refreshtoken: rf.Value,
     })
     if err != nil {
-        s.log.Error("Retreiving User Session", "method", "UserOnly", "error", err.Error())
+        s.log.Error("Retreiving User Session", "method", "isAuthenticated", "error", err.Error())
         return false, "", nil
     }
 
     us, err := accessToken.Claims.GetSubject()
     if err != nil {
-        s.log.Error("Invalid AccessToken", "method", "UserOnly", "error", err.Error())
+        s.log.Error("Invalid AccessToken", "method", "isAuthenticated", "error", err.Error())
         return false, "", nil
     }
 
     var username webtoken.Subject
     err = json.Unmarshal([]byte(us), &username)
     if err != nil {
-        s.log.Error("Invalid AccessToken", "accessToken", us, "method", "UserOnly", "error", err.Error())
+        s.log.Error("Invalid AccessToken", "accessToken", us, "method", "isAuthenticated", "error", err.Error())
         return false, "", nil
     }
 
     if accessTokenExpired {
-        s.log.Error("Expired AccessToken", "accessToken", ats, "method", "UserOnly")
+        s.log.Error("Expired AccessToken", "accessToken", ats, "method", "isAuthenticated")
         s.authCfg.database.InvalidateUserSession(ctx, database.InvalidateUserSessionParams{
             Accesstoken: ats,
             Refreshtoken: rf.Value,
         })
 
+        expiresAt, _ := refreshToken.Claims.GetExpirationTime()
+
         return false, username.Value, func(w http.ResponseWriter) {
-            s.refreshAccessToken(ctx, rf.Value, username.Value, w)
+            s.refreshAccessToken(ctx, expiresAt.Unix(), rts, rf.Value, username.Value, w)
         }
     }
 

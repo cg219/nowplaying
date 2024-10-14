@@ -26,8 +26,13 @@ func (s *Server) handle(h ...CandlerFunc) http.Handler {
                     }
                     return
 
-                case REDIRECTED_ERROR:
+                case REDIRECT_ERROR:
+                    s.log.Info("Redirect Error")
                     return
+
+                case GOTO_NEXT_HANDLER_ERROR:
+                    s.log.Info("Moving to next handler")
+                    continue
 
                 case INTERNAL_ERROR:
                     return500(w)
@@ -45,21 +50,36 @@ func (s *Server) RedirectAuthenticated(redirect string, onAuth bool) CandlerFunc
     return func(w http.ResponseWriter, r *http.Request) error {
         cookie, err := r.Cookie("nowplaying")
         if err != nil {
-            s.log.Error("Cookie Retrieval", "cookie", "nowplaying", "method", "UserOnly", "request", r, "error", err.Error())
-            return nil
+            s.log.Error("Cookie Retrieval", "cookie", "nowplaying", "method", "RedirectAuthenticated", "request", r, "error", err.Error())
+            if !onAuth {
+                http.Redirect(w, r, redirect, http.StatusSeeOther)
+                return fmt.Errorf(REDIRECT_ERROR)
+            } else {
+                return nil
+            }
         }
 
         value, err := base64.StdEncoding.DecodeString(cookie.Value)
         if err != nil {
-            s.log.Error("Base64 Decoding", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
-            return nil
+            s.log.Error("Base64 Decoding", "cookie", cookie.Value, "method", "RedirectAuthenticated", "request", r, "error", err.Error())
+            if !onAuth {
+                http.Redirect(w, r, redirect, http.StatusSeeOther)
+                return fmt.Errorf(REDIRECT_ERROR)
+            } else {
+                return nil
+            }
         }
 
         var cookieValue webtoken.CookieAuthValue
         err = json.Unmarshal(value, &cookieValue)
         if err != nil {
-            s.log.Error("Invalid Cookie Value", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
-            return nil
+            s.log.Error("Invalid Cookie Value", "cookie", cookie.Value, "method", "RedirectAuthenticated", "request", r, "error", err.Error())
+            if !onAuth {
+                http.Redirect(w, r, redirect, http.StatusSeeOther)
+                return fmt.Errorf(REDIRECT_ERROR)
+            } else {
+                return nil
+            }
         }
 
         ok, username, refresh := s.isAuthenticated(r.Context(), cookieValue.AccessToken, cookieValue.RefreshToken)
@@ -68,7 +88,9 @@ func (s *Server) RedirectAuthenticated(redirect string, onAuth bool) CandlerFunc
 
             if onAuth {
                 http.Redirect(w, r, redirect, http.StatusSeeOther)
-                return fmt.Errorf(REDIRECTED_ERROR)
+                return fmt.Errorf(GOTO_NEXT_HANDLER_ERROR)
+            } else {
+                return nil
             }
         }
         if !ok && refresh != nil {
@@ -77,15 +99,18 @@ func (s *Server) RedirectAuthenticated(redirect string, onAuth bool) CandlerFunc
 
             if onAuth {
                 http.Redirect(w, r, redirect, http.StatusSeeOther)
-                return fmt.Errorf(REDIRECTED_ERROR)
+                return fmt.Errorf(GOTO_NEXT_HANDLER_ERROR)
+            } else {
+                return nil
             }
         }
 
-        if !onAuth {
+        if onAuth {
+            return fmt.Errorf(GOTO_NEXT_HANDLER_ERROR)
+        } else {
             http.Redirect(w, r, redirect, http.StatusSeeOther)
-            return fmt.Errorf(REDIRECTED_ERROR)
+            return fmt.Errorf(REDIRECT_ERROR)
         }
-        return nil
     }
 }
 
