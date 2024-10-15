@@ -37,11 +37,15 @@ type Session struct {
 }
 
 type User struct {
-	ID                  int64
-	Username            string
-	SpotifyAccessToken  sql.NullString
-	SpotifyRefreshToken sql.NullString
-	LastfmSessionName   sql.NullString
-	LastfmSessionKey    sql.NullString
-	Password            interface{}
+	ID                   int64
+	Username             string
+	SpotifyAccessToken   sql.NullString
+	SpotifyRefreshToken  sql.NullString
+	LastfmSessionName    sql.NullString
+	LastfmSessionKey     sql.NullString
+	Password             interface{}
+	TwitterRequestToken  sql.NullString
+	TwitterRequestSecret sql.NullString
+	TwitterOauthToken    sql.NullString
+	TwitterOauthSecret   sql.NullString
 }

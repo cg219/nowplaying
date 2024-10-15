@@ -87,7 +87,7 @@ func Run(config Config) error {
     defer conn.Close()
     db := sql.OpenDB(conn)
     defer db.Close()
-    provider, err := goose.NewProvider(goose.DialectSQLite3, db, os.DirFS("./migrations"))
+    provider, err := goose.NewProvider(goose.DialectSQLite3, db, os.DirFS("./sql/migrations"))
 
     if err != nil {
         return err

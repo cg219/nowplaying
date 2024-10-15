@@ -8,6 +8,16 @@ SELECT spotify_access_token, spotify_refresh_token
 FROM users
 WHERE username = ?;
 
+-- name: GetTwitterSession :one
+SELECT twitter_request_token, twitter_request_secret, twitter_oauth_token, twitter_oauth_secret
+FROM users
+WHERE username = ?;
+
+-- name: GetTwitterSessionByRequestToken :one
+SELECT twitter_request_token, twitter_request_secret, twitter_oauth_token, twitter_oauth_secret
+FROM users
+WHERE twitter_request_token = ?;
+
 -- name: SaveLastFMSession :exec
 UPDATE users
 SET lastfm_session_name = ?,
@@ -20,38 +30,18 @@ SET spotify_access_token = ?,
     spotify_refresh_token = ?
 WHERE username = ?;
 
+-- name: SaveTwitterSession :exec
+UPDATE users
+SET twitter_request_token = ?,
+    twitter_request_secret = ?,
+    twitter_oauth_token = ?,
+    twitter_oauth_secret = ?
+WHERE username = ?;
+
 -- name: UpdateSpotifyAccessToken :exec
 UPDATE users
 SET spotify_access_token = ?
 WHERE username = ?;
-
--- name: SaveUser :exec
-INSERT INTO users(username, password)
-VALUES(?, ?);
-
--- name: GetUser :one
-SELECT id, username
-FROM users
-WHERE username = ?;
-
--- name: GetUserWithPassword :one
-SELECT username, password
-FROM users
-WHERE username = ?;
-
--- name: GetLatestTrack :one
-SELECT artist_name, track_name, timestamp, duration
-FROM scrobbles
-ORDER BY timestamp DESC
-LIMIT 1;
-
--- name: SaveScrobble :exec
-INSERT INTO scrobbles(artist_name, track_name, album_name, album_artist, mbid, track_number, duration, timestamp, source, uid)
-VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-
--- name: RemoveScrobble :exec
-DELETE FROM scrobbles
-WHERE id = ?;
 
 -- name: GetUserSession :one
 SELECT accessToken, refreshToken, valid
