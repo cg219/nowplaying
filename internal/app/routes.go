@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/cg219/nowplaying/internal/database"
+	"github.com/dghubble/oauth1"
 )
 
 func (s *Server) AddSpotify(w http.ResponseWriter, r *http.Request) error {
@@ -112,6 +113,30 @@ func (s *Server) Test(w http.ResponseWriter, r *http.Request) error {
     resp := TestResp{ Value: r.Context().Value("username").(string)}
     resp.Success = true
     encode[TestResp](w, http.StatusOK, resp)
+    return nil
+}
+
+func (s *Server) TwitterRedirect(w http.ResponseWriter, r *http.Request) error {
+    reqToken, verifier, _ := oauth1.ParseAuthorizationCallback(r)
+
+    creds, err :=  s.authCfg.database.GetTwitterSessionByRequestToken(r.Context(), sql.NullString{ String: reqToken, Valid: true })
+
+    if err != nil {
+        s.log.Error("Twitter Redirect Mismatch", "error", err)
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    accessToken, accessSecret, _ := s.authCfg.TwitterOAuth.AccessToken(reqToken, creds.TwitterRequestSecret.String, verifier)
+    s.authCfg.database.SaveTwitterSession(r.Context(), database.SaveTwitterSessionParams{
+        TwitterRequestSecret: creds.TwitterRequestSecret,
+        TwitterRequestToken: creds.TwitterRequestToken,
+        TwitterOauthToken: sql.NullString{ String: accessToken, Valid: true },
+        TwitterOauthSecret: sql.NullString{ String: accessSecret, Valid: true },
+    })
+
+    token := oauth1.NewToken(accessToken, accessSecret)
+    s.log.Info("Twitter Auth Redirect", "token", token)
+    http.Redirect(w, r, "/settings", http.StatusSeeOther)
     return nil
 }
 

@@ -68,6 +68,7 @@ func addRoutes(srv *Server) {
     srv.mux.Handle("POST /api/spotify", srv.handle(srv.UserOnly, srv.AddSpotify))
     srv.mux.Handle("DELETE /api/spotify", srv.handle(srv.UserOnly, srv.RemoveSpotify))
     srv.mux.Handle("GET /auth/spotify-redirect", srv.handle(srv.SpotifyRedirect))
+    srv.mux.Handle("GET /auth/x-redirect", srv.handle(srv.TwitterRedirect))
     srv.mux.Handle("POST /auth/register", srv.handle(srv.Register))
     srv.mux.Handle("POST /auth/login", srv.handle(srv.Login))
     srv.mux.Handle("GET /test/x", srv.handle(srv.UserOnly, srv.Test))
@@ -105,6 +106,8 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
     page := &struct{
         SpotifyTrack string
         SpotifyOn bool
+        TwitterOn bool
+        TwitterAuthURL string
     }{}
 
     if spotify.SpotifyAccessToken.Valid && spotify.SpotifyRefreshToken.Valid {
@@ -118,6 +121,8 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
             }
         }
     }
+
+    page.TwitterAuthURL = GetAuthURL(s.authCfg.ctx, s.authCfg.TwitterOAuth, s.authCfg.database, user.Username)
 
     tmpl := template.Must(template.ParseFiles("templates/pages/settings.html"))
     tmpl.Execute(w, page)

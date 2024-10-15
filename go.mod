@@ -3,6 +3,7 @@ module github.com/cg219/nowplaying
 go 1.22.3
 
 require (
+	github.com/dghubble/oauth1 v0.7.3
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/ppalone/ytsearch v0.0.0-20240713115953-224c668645c7
 	github.com/pressly/goose/v3 v3.22.1

@@ -28,6 +28,14 @@
                         <input type="button" name="spotify-auth" value="Authorize with Spotify" />
                     </fieldset>
                     {{end}}
+                    {{if not .TwitterOn}}
+                    <fieldset>
+                        <label for="x-auth">Allow X Access</label>
+                        <a target="_blank" href="{{.TwitterAuthURL}}">
+                            <input type="button" name="x-auth" value="Authorize with X">
+                        </a>
+                    </fieldset>
+                    {{end}}
                 </form>
             </main>
         </section>

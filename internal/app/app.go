@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/cg219/nowplaying/internal/database"
+	"github.com/dghubble/oauth1"
+	"github.com/dghubble/oauth1/twitter"
 	"github.com/pressly/goose/v3"
 	"github.com/tursodatabase/go-libsql"
 )
@@ -35,6 +37,11 @@ type Config struct {
         Name string `yaml:"name"`
         Id int `yaml:"id"`
     } `yaml:"app"`
+    Twitter struct {
+        Id string `yaml:"id"`
+        Secret string `yaml:"secret"`
+        Redirect string `yaml:"redirect"`
+    }
 }
 
 type AppCfg struct {
@@ -44,6 +51,7 @@ type AppCfg struct {
     ctx context.Context
     LastFMSession *LastFM
     SpotifySession *Spotify
+    TwitterOAuth oauth1.Config
     listenInterval time.Ticker
     database *database.Queries
     haveNewSessions bool
@@ -65,6 +73,12 @@ func Run(config Config) error {
         },
         listenInterval: *time.NewTicker(5 * time.Second),
         ctx: context.Background(),
+        TwitterOAuth: oauth1.Config {
+            ConsumerKey: config.Twitter.Id,
+            ConsumerSecret: config.Twitter.Secret,
+            CallbackURL: config.Twitter.Redirect,
+            Endpoint: twitter.AuthorizeEndpoint,
+        },
     }
 
     dbName := config.Turso.Name
