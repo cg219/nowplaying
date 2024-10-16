@@ -160,7 +160,7 @@ func (s *Server) SpotifyRedirect(w http.ResponseWriter, r *http.Request) error {
             Username: username,
         })
     }
-    
+
     http.Redirect(w, r, "/settings", http.StatusSeeOther)
     return nil
 }

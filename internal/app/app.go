@@ -173,7 +173,18 @@ func Run(config Config) error {
                     Uid: int(user.ID),
                     Progress: v.Song.Progress,
                 }); ok {
-                    log.Printf("Music URL: %s\n", yts.Search(fmt.Sprintf("%s - %s", v.Song.Artist, v.Song.Name)))
+                    twitter := NewTwitter(v.Username, TwitterConfig(cfg.config.Twitter), cfg.database)
+
+                    err := twitter.AuthWithDB(cfg.ctx)
+                    if err != nil {
+                        log.Printf("Oops: %s", err)
+                        continue
+                    }
+
+                    playing := fmt.Sprintf("%s - %s", v.Song.Artist, v.Song.Name)
+                    tweet := fmt.Sprintf("Now Playing\n\n%s\nLink: %s\n", playing, yts.Search(playing))
+                    log.Println(tweet)
+                    twitter.Tweet(tweet)
                 }
 
             }
