@@ -92,7 +92,7 @@ func (q *Queries) GetLastFMSession(ctx context.Context, username string) (GetLas
 }
 
 const getSpotifySession = `-- name: GetSpotifySession :one
-SELECT spotify_access_token, spotify_refresh_token
+SELECT spotify_access_token, spotify_refresh_token, spotify_auth_state
 FROM users
 WHERE username = ?
 `
@@ -100,12 +100,13 @@ WHERE username = ?
 type GetSpotifySessionRow struct {
 	SpotifyAccessToken  sql.NullString
 	SpotifyRefreshToken sql.NullString
+	SpotifyAuthState    sql.NullString
 }
 
 func (q *Queries) GetSpotifySession(ctx context.Context, username string) (GetSpotifySessionRow, error) {
 	row := q.db.QueryRowContext(ctx, getSpotifySession, username)
 	var i GetSpotifySessionRow
-	err := row.Scan(&i.SpotifyAccessToken, &i.SpotifyRefreshToken)
+	err := row.Scan(&i.SpotifyAccessToken, &i.SpotifyRefreshToken, &i.SpotifyAuthState)
 	return i, err
 }
 
@@ -135,7 +136,7 @@ func (q *Queries) GetTwitterSession(ctx context.Context, username string) (GetTw
 }
 
 const getTwitterSessionByRequestToken = `-- name: GetTwitterSessionByRequestToken :one
-SELECT twitter_request_token, twitter_request_secret, twitter_oauth_token, twitter_oauth_secret
+SELECT twitter_request_token, twitter_request_secret, twitter_oauth_token, twitter_oauth_secret, username
 FROM users
 WHERE twitter_request_token = ?
 `
@@ -145,6 +146,7 @@ type GetTwitterSessionByRequestTokenRow struct {
 	TwitterRequestSecret sql.NullString
 	TwitterOauthToken    sql.NullString
 	TwitterOauthSecret   sql.NullString
+	Username             string
 }
 
 func (q *Queries) GetTwitterSessionByRequestToken(ctx context.Context, twitterRequestToken sql.NullString) (GetTwitterSessionByRequestTokenRow, error) {
@@ -155,6 +157,7 @@ func (q *Queries) GetTwitterSessionByRequestToken(ctx context.Context, twitterRe
 		&i.TwitterRequestSecret,
 		&i.TwitterOauthToken,
 		&i.TwitterOauthSecret,
+		&i.Username,
 	)
 	return i, err
 }
@@ -288,18 +291,25 @@ func (q *Queries) SaveMusicSession(ctx context.Context, arg SaveMusicSessionPara
 const saveSpotifySession = `-- name: SaveSpotifySession :exec
 UPDATE users
 SET spotify_access_token = ?,
-    spotify_refresh_token = ?
+    spotify_refresh_token = ?,
+    spotify_auth_state = ?
 WHERE username = ?
 `
 
 type SaveSpotifySessionParams struct {
 	SpotifyAccessToken  sql.NullString
 	SpotifyRefreshToken sql.NullString
+	SpotifyAuthState    sql.NullString
 	Username            string
 }
 
 func (q *Queries) SaveSpotifySession(ctx context.Context, arg SaveSpotifySessionParams) error {
-	_, err := q.db.ExecContext(ctx, saveSpotifySession, arg.SpotifyAccessToken, arg.SpotifyRefreshToken, arg.Username)
+	_, err := q.db.ExecContext(ctx, saveSpotifySession,
+		arg.SpotifyAccessToken,
+		arg.SpotifyRefreshToken,
+		arg.SpotifyAuthState,
+		arg.Username,
+	)
 	return err
 }
 

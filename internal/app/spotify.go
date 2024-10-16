@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -10,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -199,38 +199,44 @@ func (s *Spotify) Listen(ctx context.Context, out *chan any) error {
     }
 }
 
-func (s *Spotify) Auth(ctx context.Context) error {
-    req, err := http.NewRequestWithContext(ctx, "GET", "https://accounts.spotify.com/authorize", nil)
-    if err != nil {
-        return err
-    }
+func GetRandomState(username string) string {
+    b := make([]byte, 8)
+    rand.Read(b)
 
+   return fmt.Sprintf("%s||%s", username, base64.URLEncoding.EncodeToString(b)[:8])
+}
+
+func DecodeRandomState(state string) string {
+    return strings.Split(string(state), "||")[0]
+}
+
+func GetSpotifyAuthURL(ctx context.Context, username string, config SpotifyConfig, db *database.Queries) string {
+    req, _ := http.NewRequestWithContext(ctx, "GET", "https://accounts.spotify.com/authorize", nil)
+    state := GetRandomState(username)
     vals := req.URL.Query()
-    vals.Add("response_type", "code")
-    vals.Add("client_id", s.config.Id)
-    vals.Add("state", "something")
-    vals.Add("redirect_uri", s.config.Redirect)
-    vals.Add("scope", "user-read-currently-playing user-read-playback-state")
 
+    vals.Add("response_type", "code")
+    vals.Add("client_id", config.Id)
+    vals.Add("state", state)
+    vals.Add("redirect_uri", config.Redirect)
+    vals.Add("scope", "user-read-currently-playing user-read-playback-state")
     req.URL.RawQuery = vals.Encode()
 
-    exec.Command("open", req.URL.String()).Run()
+    db.SaveSpotifySession(ctx, database.SaveSpotifySessionParams{
+        SpotifyAuthState: sql.NullString{ String: state, Valid: true },
+        SpotifyAccessToken: sql.NullString{ Valid: false },
+        SpotifyRefreshToken: sql.NullString{ Valid: false },
+        Username: username,
+    })
 
-    fmt.Println("Hit Enter to Continue after authorization")
-    fmt.Scanln()
-
-    return nil
+    return req.URL.String()
 }
 
 func (s *Spotify) AuthWithDB(ctx context.Context) error {
     dbSession, err := s.db.GetSpotifySession(ctx, s.Username)
-    if err != nil {
-        log.Printf("Oops: %s\n", err)
-    }
 
-    if !dbSession.SpotifyAccessToken.Valid && !dbSession.SpotifyRefreshToken.Valid {
-        s.Auth(ctx)
-        return nil
+    if (!dbSession.SpotifyAccessToken.Valid && !dbSession.SpotifyRefreshToken.Valid) || err != nil {
+        return fmt.Errorf(AUTH_ERROR)
     }
 
     s.creds.AccessToken = dbSession.SpotifyAccessToken.String
@@ -239,41 +245,34 @@ func (s *Spotify) AuthWithDB(ctx context.Context) error {
     return nil
 }
 
-func (s *Spotify) GetSpotifyTokens(ctx context.Context) error {
+func GetSpotifyTokens(ctx context.Context, code string, config SpotifyConfig) (SpotifyTokenResp, error) {
+    var data SpotifyTokenResp
+
     vals := url.Values{}
     vals.Set("grant_type", "authorization_code")
-    vals.Set("code", s.creds.AuthCode)
-    vals.Set("redirect_uri", s.config.Redirect)
+    vals.Set("code", code)
+    vals.Set("redirect_uri", config.Redirect)
 
-    req, err := http.NewRequestWithContext(ctx, "POST", "https://accounts.spotify.com/api/token", strings.NewReader(vals.Encode()))
-    if err != nil {
-        return err
-    }
-
-    req.Header.Add("Authorization", fmt.Sprintf("Basic %s", base64.RawStdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", s.config.Id, s.config.Secret)))))
+    req, _ := http.NewRequestWithContext(ctx, "POST", "https://accounts.spotify.com/api/token", strings.NewReader(vals.Encode()))
+    req.Header.Add("Authorization", fmt.Sprintf("Basic %s", base64.RawStdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", config.Id, config.Secret)))))
     req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-    resp, err := s.client.Do(req)
+    client := &http.Client{
+        Timeout: time.Second * 5,
+    }
+    resp, err := client.Do(req)
     if err != nil {
-        return err
+        return data, err
     }
 
     defer resp.Body.Close()
 
-    var data SpotifyTokenResp
     err = json.NewDecoder(resp.Body).Decode(&data)
     if err != nil {
-        return err
+        return data, err
     }
     
-    // s.db.SaveUser(ctx, s.Username)
-    s.db.SaveSpotifySession(ctx, database.SaveSpotifySessionParams{
-        SpotifyAccessToken: sql.NullString{ String: data.AccessToken, Valid: true },
-        SpotifyRefreshToken: sql.NullString{ String: data.RefreshToken, Valid: true },
-        Username: s.Username,
-    })
-    
-    return nil
+    return data, nil
 }
 
 func (s *Spotify) RefreshSpotifyTokens(ctx context.Context) error {

@@ -118,7 +118,6 @@ func (s *Server) Test(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) TwitterRedirect(w http.ResponseWriter, r *http.Request) error {
     reqToken, verifier, _ := oauth1.ParseAuthorizationCallback(r)
-
     creds, err :=  s.authCfg.database.GetTwitterSessionByRequestToken(r.Context(), sql.NullString{ String: reqToken, Valid: true })
 
     if err != nil {
@@ -132,6 +131,7 @@ func (s *Server) TwitterRedirect(w http.ResponseWriter, r *http.Request) error {
         TwitterRequestToken: creds.TwitterRequestToken,
         TwitterOauthToken: sql.NullString{ String: accessToken, Valid: true },
         TwitterOauthSecret: sql.NullString{ String: accessSecret, Valid: true },
+        Username: creds.Username,
     })
 
     token := oauth1.NewToken(accessToken, accessSecret)
@@ -141,9 +141,27 @@ func (s *Server) TwitterRedirect(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) SpotifyRedirect(w http.ResponseWriter, r *http.Request) error {
-    s.authCfg.SpotifySession.SetAuthCode(r.URL.Query().Get("code"))
-    s.authCfg.SpotifySession.GetSpotifyTokens(r.Context())
-    fmt.Println(r.URL.Query())
+    state := r.URL.Query().Get("state")
+    username := DecodeRandomState(state)
+    session, _ := s.authCfg.database.GetSpotifySession(r.Context(), username)
+
+    if session.SpotifyAuthState.Valid && strings.EqualFold(state, session.SpotifyAuthState.String) {
+        res, err := GetSpotifyTokens(r.Context(), r.URL.Query().Get("code"), SpotifyConfig(s.authCfg.config.Spotify))
+
+        if err != nil {
+            s.log.Error("Spotify Auth Failue", "err", err)
+            return fmt.Errorf(AUTH_ERROR)
+        }
+
+        s.log.Info("Spotify Auth Redirect", "response", res)
+        s.authCfg.database.SaveSpotifySession(r.Context(), database.SaveSpotifySessionParams{
+            SpotifyAccessToken: sql.NullString{ String: res.AccessToken, Valid: true },
+            SpotifyRefreshToken: sql.NullString{ String: res.RefreshToken, Valid: true },
+            Username: username,
+        })
+    }
+    
+    http.Redirect(w, r, "/settings", http.StatusSeeOther)
     return nil
 }
 

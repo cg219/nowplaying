@@ -103,8 +103,15 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
         return err
     }
 
+    twitter, err := s.authCfg.database.GetTwitterSession(r.Context(), r.Context().Value("username").(string))
+    if err != nil && err != sql.ErrNoRows {
+        return err
+    }
+
+
     page := &struct{
         SpotifyTrack string
+        SpotifyAuthURL string
         SpotifyOn bool
         TwitterOn bool
         TwitterAuthURL string
@@ -112,6 +119,12 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
 
     if spotify.SpotifyAccessToken.Valid && spotify.SpotifyRefreshToken.Valid {
         page.SpotifyOn = true
+    } else {
+        page.SpotifyAuthURL = GetSpotifyAuthURL(r.Context(), user.Username, SpotifyConfig{
+            Id: s.authCfg.config.Spotify.Id,
+            Redirect: s.authCfg.config.Spotify.Redirect,
+            Secret: s.authCfg.config.Spotify.Secret,
+        }, s.authCfg.database)
     }
 
     for _, v := range sessions {
@@ -122,7 +135,11 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
         }
     }
 
-    page.TwitterAuthURL = GetAuthURL(s.authCfg.ctx, s.authCfg.TwitterOAuth, s.authCfg.database, user.Username)
+    if twitter.TwitterOauthToken.Valid && twitter.TwitterOauthSecret.Valid {
+        page.TwitterOn = true
+    } else {
+        page.TwitterAuthURL = GetAuthURL(s.authCfg.ctx, s.authCfg.TwitterOAuth, s.authCfg.database, user.Username)
+    }
 
     tmpl := template.Must(template.ParseFiles("templates/pages/settings.html"))
     tmpl.Execute(w, page)

@@ -4,7 +4,7 @@ FROM users
 WHERE username = ?;
 
 -- name: GetSpotifySession :one
-SELECT spotify_access_token, spotify_refresh_token
+SELECT spotify_access_token, spotify_refresh_token, spotify_auth_state
 FROM users
 WHERE username = ?;
 
@@ -14,7 +14,7 @@ FROM users
 WHERE username = ?;
 
 -- name: GetTwitterSessionByRequestToken :one
-SELECT twitter_request_token, twitter_request_secret, twitter_oauth_token, twitter_oauth_secret
+SELECT twitter_request_token, twitter_request_secret, twitter_oauth_token, twitter_oauth_secret, username
 FROM users
 WHERE twitter_request_token = ?;
 
@@ -27,7 +27,8 @@ WHERE username = ?;
 -- name: SaveSpotifySession :exec
 UPDATE users
 SET spotify_access_token = ?,
-    spotify_refresh_token = ?
+    spotify_refresh_token = ?,
+    spotify_auth_state = ?
 WHERE username = ?;
 
 -- name: SaveTwitterSession :exec

@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -47,10 +46,8 @@ type Config struct {
 type AppCfg struct {
     config Config
     username string
-    client *http.Client
     ctx context.Context
     LastFMSession *LastFM
-    SpotifySession *Spotify
     TwitterOAuth oauth1.Config
     listenInterval time.Ticker
     database *database.Queries
@@ -68,9 +65,6 @@ func Run(config Config) error {
     cfg := &AppCfg{
         config: config,
         username: config.App.Name,
-        client: &http.Client{
-            Timeout: time.Second * 60,
-        },
         listenInterval: *time.NewTicker(5 * time.Second),
         ctx: context.Background(),
         TwitterOAuth: oauth1.Config {

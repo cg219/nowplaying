@@ -48,4 +48,5 @@ type User struct {
 	TwitterRequestSecret sql.NullString
 	TwitterOauthToken    sql.NullString
 	TwitterOauthSecret   sql.NullString
+	SpotifyAuthState     sql.NullString
 }
