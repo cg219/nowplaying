@@ -34,6 +34,12 @@ func (s *Server) AddSpotify(w http.ResponseWriter, r *http.Request) error {
                 s.log.Error("Activating Music Session", "Session ID", v.ID, "error", err)
                 return fmt.Errorf(INTERNAL_ERROR)
             }
+
+            fmt.Println("Pre ADD:", s.authCfg.haveNewSessions)
+
+            s.authCfg.haveNewSessions = true
+
+            fmt.Println("Post ADD:", s.authCfg.haveNewSessions)
             return nil
         }
     }
@@ -51,6 +57,12 @@ func (s *Server) AddSpotify(w http.ResponseWriter, r *http.Request) error {
         s.log.Error("Saving Music Session", "data", spotify, "error", err)
         return fmt.Errorf(INTERNAL_ERROR)
     }
+
+    fmt.Println("Pre ADD:", s.authCfg.haveNewSessions)
+
+    s.authCfg.haveNewSessions = true
+
+    fmt.Println("Post ADD:", s.authCfg.haveNewSessions)
     return nil
 }
 
@@ -85,6 +97,12 @@ func (s *Server) RemoveSpotify(w http.ResponseWriter, r *http.Request) error {
         s.log.Error("Removing Music Session", "id", idToRemove, "error", err)
         return fmt.Errorf(INTERNAL_ERROR)
     }
+
+    fmt.Println("Pre REMOVE:", s.authCfg.haveNewSessions)
+
+    s.authCfg.haveNewSessions = true
+
+    fmt.Println("Post REMOVE:", s.authCfg.haveNewSessions)
     return nil
 }
 

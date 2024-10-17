@@ -175,21 +175,19 @@ func (s *Spotify) Decode(encoded []byte) error {
     return nil
 }
 
-func (s *Spotify) Listen(ctx context.Context, out *chan any) error {
-    done := make(chan bool)
+func (s *Spotify) Listen(ctx context.Context, out *chan any, done chan bool) {
     timer := time.NewTicker(s.Duration)
-    defer close(done)
 
     for {
         select {
         case <- done:
-            return nil
+            return
         case <- timer.C:
             song, err := s.CheckCurrentTrack(ctx)
 
             if err != nil {
                 log.Printf("Oops: %s\n", err)
-                return err
+                done <- false
             }
 
             if out != nil && song != nil {

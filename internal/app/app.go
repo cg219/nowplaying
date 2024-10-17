@@ -56,9 +56,108 @@ type AppCfg struct {
 
 type Session interface {
     AuthWithDB(context.Context) error
-    Listen(context.Context, *chan any) error
+    Listen(context.Context, *chan any, chan bool)
     Encode() []byte
     Decode([]byte) error
+}
+
+func AppLoop(cfg *AppCfg) bool {
+    cfg.haveNewSessions = false
+    ctx := cfg.ctx
+    encodedSessions, _ := cfg.database.GetActiveMusicSessions(ctx)
+    sessions := []Session{}
+    restartLoop := false
+
+    for _, es := range encodedSessions {
+        d, _ := base64.StdEncoding.DecodeString(es.Data)
+
+        switch es.Type {
+        case "spotify":
+            s := NewSpotifyFromEncoded(d, SpotifyConfig(cfg.config.Spotify), cfg.database)
+            s.Id = int(es.ID)
+            sessions = append(sessions, s)
+        case `applemusic`:
+            fmt.Println("Apple Music: ")
+        }
+    }
+
+    yts := NewYoutube(ctx)
+    exit := make(chan struct{})
+    output := make(chan any)
+    listening := make(chan bool)
+    defer close(output)
+    defer close(exit)
+    defer close(listening)
+
+    for _, s := range sessions {
+        go func() {
+            s.AuthWithDB(ctx)
+            s.Listen(ctx, &output, listening);
+
+            for {
+                select {
+                case v := <- listening:
+                    if !v {
+                        log.Println("Something Goin on")
+                    }
+                    return
+                }
+            }
+        }()
+    }
+
+    go func() {
+        for {
+            if cfg.haveNewSessions {
+                exit <- struct{}{}
+                return
+            }
+        }
+    }()
+
+    go func() {
+        for v := range output {
+            switch v := v.(type) {
+            case SpotifyListenValue:
+                user, _ := cfg.database.GetUser(cfg.ctx, v.Username)
+                scrobbler := NewScrobbler(v.Username, cfg.database)
+                if ok := scrobbler.Scrobble(context.Background(), Scrobble{
+                    ArtistName: v.Song.Artist,
+                    TrackName: v.Song.Name,
+                    AlbumName: v.Song.Album.Name,
+                    AlbumArtist: v.Song.Album.Artist,
+                    Timestamp: v.Song.Timestamp,
+                    Duration: v.Song.Duration,
+                    TrackNumber: fmt.Sprintf("%d", v.Song.TrackNumber),
+                    Source: "spotify-local",
+                    Uid: int(user.ID),
+                    Progress: v.Song.Progress,
+                }); ok {
+                    twitter := NewTwitter(v.Username, TwitterConfig(cfg.config.Twitter), cfg.database)
+
+                    err := twitter.AuthWithDB(cfg.ctx)
+                    if err != nil {
+                        log.Printf("Oops: %s", err)
+                        continue
+                    }
+
+                    playing := fmt.Sprintf("%s - %s", v.Song.Artist, v.Song.Name)
+                    tweet := fmt.Sprintf("Now Playing\n\n%s\nLink: %s\n", playing, yts.Search(playing))
+                    log.Println(tweet)
+                    twitter.Tweet(tweet)
+                }
+
+            }
+        }
+    }()
+
+    <- exit
+    
+    if cfg.haveNewSessions {
+        restartLoop = true
+    }
+
+    return restartLoop
 }
 
 func Run(config Config) error {
@@ -118,79 +217,10 @@ func Run(config Config) error {
         StartServer(cfg)
     }()
 
-    encodedSessions, err := cfg.database.GetActiveMusicSessions(cfg.ctx)
-    if err != nil {
-        return err
-    }
-
-    sessions := []Session{}
-
-    for _, es := range encodedSessions {
-        d, _ := base64.StdEncoding.DecodeString(es.Data)
-
-        switch es.Type {
-        case "spotify":
-            s := NewSpotifyFromEncoded(d, SpotifyConfig(cfg.config.Spotify), cfg.database)
-            s.Id = int(es.ID)
-            sessions = append(sessions, s)
-        case `applemusic`:
-            fmt.Println("Apple Music: ")
+    for {
+        restart := AppLoop(cfg)
+        if !restart {
+            return nil
         }
     }
-
-    yts := NewYoutube(cfg.ctx)
-    exit := make(chan struct{})
-    output := make(chan any)
-    defer close(output)
-    defer close(exit)
-
-    for _, s := range sessions {
-        go func() {
-            s.AuthWithDB(cfg.ctx)
-
-            if err := s.Listen(cfg.ctx, &output); err != nil {
-                log.Printf("Oops: %s", err)
-            }
-            exit <- struct{}{}
-        }()
-    }
-
-    go func() {
-        for v := range output {
-            switch v := v.(type) {
-            case SpotifyListenValue:
-                user, _ := cfg.database.GetUser(cfg.ctx, v.Username)
-                scrobbler := NewScrobbler(v.Username, cfg.database)
-                if ok := scrobbler.Scrobble(context.Background(), Scrobble{
-                    ArtistName: v.Song.Artist,
-                    TrackName: v.Song.Name,
-                    AlbumName: v.Song.Album.Name,
-                    AlbumArtist: v.Song.Album.Artist,
-                    Timestamp: v.Song.Timestamp,
-                    Duration: v.Song.Duration,
-                    TrackNumber: fmt.Sprintf("%d", v.Song.TrackNumber),
-                    Source: "spotify-local",
-                    Uid: int(user.ID),
-                    Progress: v.Song.Progress,
-                }); ok {
-                    twitter := NewTwitter(v.Username, TwitterConfig(cfg.config.Twitter), cfg.database)
-
-                    err := twitter.AuthWithDB(cfg.ctx)
-                    if err != nil {
-                        log.Printf("Oops: %s", err)
-                        continue
-                    }
-
-                    playing := fmt.Sprintf("%s - %s", v.Song.Artist, v.Song.Name)
-                    tweet := fmt.Sprintf("Now Playing\n\n%s\nLink: %s\n", playing, yts.Search(playing))
-                    log.Println(tweet)
-                    twitter.Tweet(tweet)
-                }
-
-            }
-        }
-    }()
-
-    <- exit
-    return nil
 }
