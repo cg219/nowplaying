@@ -35,11 +35,7 @@ func (s *Server) AddSpotify(w http.ResponseWriter, r *http.Request) error {
                 return fmt.Errorf(INTERNAL_ERROR)
             }
 
-            fmt.Println("Pre ADD:", s.authCfg.haveNewSessions)
-
             s.authCfg.haveNewSessions = true
-
-            fmt.Println("Post ADD:", s.authCfg.haveNewSessions)
             return nil
         }
     }
@@ -58,11 +54,7 @@ func (s *Server) AddSpotify(w http.ResponseWriter, r *http.Request) error {
         return fmt.Errorf(INTERNAL_ERROR)
     }
 
-    fmt.Println("Pre ADD:", s.authCfg.haveNewSessions)
-
     s.authCfg.haveNewSessions = true
-
-    fmt.Println("Post ADD:", s.authCfg.haveNewSessions)
     return nil
 }
 
