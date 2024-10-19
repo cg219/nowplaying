@@ -65,6 +65,7 @@ func NewServer(cfg *AppCfg) *Server {
 func addRoutes(srv *Server) {
     srv.mux.Handle("GET /", srv.handle(srv.RedirectAuthenticated("/settings", true), srv.getLoginPage))
     srv.mux.Handle("POST /api/login", srv.handle(srv.LogUserIn))
+    srv.mux.Handle("GET /api/last-scrobble", srv.handle(srv.UserOnly, srv.GetLastScrobble))
     srv.mux.Handle("POST /api/spotify", srv.handle(srv.UserOnly, srv.AddSpotify))
     srv.mux.Handle("DELETE /api/spotify", srv.handle(srv.UserOnly, srv.RemoveSpotify))
     srv.mux.Handle("GET /auth/spotify-redirect", srv.handle(srv.SpotifyRedirect))

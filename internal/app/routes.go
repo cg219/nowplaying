@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"html/template"
 	"net/http"
 	_ "net/http/pprof"
 	"strings"
+	"time"
 
 	"github.com/cg219/nowplaying/internal/database"
 	"github.com/dghubble/oauth1"
@@ -95,6 +97,29 @@ func (s *Server) RemoveSpotify(w http.ResponseWriter, r *http.Request) error {
     s.authCfg.haveNewSessions = true
 
     fmt.Println("Post REMOVE:", s.authCfg.haveNewSessions)
+    return nil
+}
+
+func (s *Server) GetLastScrobble(w http.ResponseWriter, r *http.Request) error {
+    type Page struct {
+        ArtistName string
+        TrackName string
+        Timestamp string
+    }
+
+    username := r.Context().Value("username")
+
+    user, _ := s.authCfg.database.GetUser(r.Context(), username.(string))
+    scrobble, _ := s.authCfg.database.GetLatestTrack(r.Context(), user.ID)
+    timestamp := time.Unix(0, 0).Add(time.Duration(scrobble.Timestamp) * time.Millisecond)
+    page := &Page{
+        ArtistName: scrobble.ArtistName,
+        TrackName: scrobble.TrackName,
+        Timestamp: timestamp.Format("01/02/2006 - 03:04PM"),
+    }
+
+    tmpl := template.Must(template.ParseFiles("templates/fragments/last-scrobble.html"))
+    tmpl.Execute(w, page)
     return nil
 }
 
