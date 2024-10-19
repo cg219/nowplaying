@@ -72,6 +72,7 @@ func addRoutes(srv *Server) {
     srv.mux.Handle("POST /auth/register", srv.handle(srv.Register))
     srv.mux.Handle("POST /auth/login", srv.handle(srv.Login))
     srv.mux.Handle("GET /test/x", srv.handle(srv.UserOnly, srv.Test))
+    srv.mux.Handle("GET /me", srv.handle(srv.RedirectAuthenticated("/", false), srv.getUserPage))
     srv.mux.Handle("GET /settings", srv.handle(srv.RedirectAuthenticated("/", false), srv.getSettingsPage))
 }
 
@@ -83,6 +84,12 @@ func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
     tmpl := template.Must(template.ParseFiles("templates/pages/auth.html"))
+    tmpl.Execute(w, nil)
+    return nil
+}
+
+func (s *Server) getUserPage(w http.ResponseWriter, r *http.Request) error {
+    tmpl := template.Must(template.ParseFiles("templates/pages/user.html"))
     tmpl.Execute(w, nil)
     return nil
 }
