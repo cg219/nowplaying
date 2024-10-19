@@ -100,7 +100,7 @@ func (s *Scrobbler) AuthWithDB(ctx context.Context) error {
 }
 
 func (s *Scrobbler) Scrobble(ctx context.Context, sc Scrobble) bool {
-    dbValue, err := s.db.GetLatestTrack(ctx)
+    dbValue, err := s.db.GetLatestTrack(ctx, int64(sc.Uid))
 
     if err == sql.ErrNoRows {
         s.db.SaveScrobble(ctx, scrobbleToParams(sc))
@@ -145,7 +145,9 @@ func scrobbleToParams(sc Scrobble) database.SaveScrobbleParams {
 
 func (s *Scrobbler) CheckLastTrack(ctx context.Context) error {
     // log.Printf("LastFM: %s - %s\n",tracklist.Recent.Tracks[0].Artist.Name, tracklist.Recent.Tracks[0].Name)
-    dbValue, err := s.db.GetLatestTrack(ctx)
+
+    user, _ := s.db.GetUser(ctx, s.Username)
+    dbValue, err := s.db.GetLatestTrack(ctx, user.ID)
     if err != nil {
         if err == sql.ErrNoRows {
             log.Println("Scrobbler: No Tracks Yet")

@@ -13,6 +13,7 @@ import (
 const getLatestTrack = `-- name: GetLatestTrack :one
 SELECT artist_name, track_name, timestamp, duration
 FROM scrobbles
+WHERE uid = ?
 ORDER BY timestamp DESC
 LIMIT 1
 `
@@ -24,8 +25,8 @@ type GetLatestTrackRow struct {
 	Duration   int64
 }
 
-func (q *Queries) GetLatestTrack(ctx context.Context) (GetLatestTrackRow, error) {
-	row := q.db.QueryRowContext(ctx, getLatestTrack)
+func (q *Queries) GetLatestTrack(ctx context.Context, uid int64) (GetLatestTrackRow, error) {
+	row := q.db.QueryRowContext(ctx, getLatestTrack, uid)
 	var i GetLatestTrackRow
 	err := row.Scan(
 		&i.ArtistName,

@@ -1,6 +1,7 @@
 -- name: GetLatestTrack :one
 SELECT artist_name, track_name, timestamp, duration
 FROM scrobbles
+WHERE uid = ?
 ORDER BY timestamp DESC
 LIMIT 1;
 
