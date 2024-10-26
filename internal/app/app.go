@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/cg219/nowplaying/internal/database"
@@ -59,6 +60,26 @@ type Session interface {
     Listen(context.Context, *chan any, chan bool)
     Encode() []byte
     Decode([]byte) error
+}
+
+func NewConfig() *Config {
+    cfg := &Config{}
+
+    cfg.LastFM.Key = os.Getenv("LASTFM_KEY")
+    cfg.LastFM.Secret = os.Getenv("LASTFM_SECRET")
+    cfg.Turso.Name = os.Getenv("TURSO_NAME")
+    cfg.Turso.Url = os.Getenv("TURSO_URL")
+    cfg.Turso.Token = os.Getenv("TURSO_TOKEN")
+    cfg.Spotify.Id = os.Getenv("SPOTIFY_ID")
+    cfg.Spotify.Secret = os.Getenv("SPOTIFY_SECRET")
+    cfg.Spotify.Redirect = os.Getenv("SPOTIFY_REDIRECT")
+    cfg.App.Name = os.Getenv("APP_USERNAME")
+    cfg.Twitter.Id = os.Getenv("TWITTER_ID")
+    cfg.Twitter.Secret = os.Getenv("TWITTER_SECRET")
+    cfg.Twitter.Redirect = os.Getenv("TWITTER_REDIRECT")
+    cfg.App.Id, _ = strconv.Atoi(os.Getenv("APP_UID"))
+
+    return cfg
 }
 
 func AppLoop(cfg *AppCfg) bool {

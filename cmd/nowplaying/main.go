@@ -8,24 +8,21 @@ import (
 	"syscall"
 
 	"github.com/cg219/nowplaying/internal/app"
-	"gopkg.in/yaml.v3"
+	"github.com/joho/godotenv"
 )
 
-//go:embed config.yml
-var config string
-
 func main() {
-    var cfg app.Config
-
     ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
     defer stop()
 
-    if err := yaml.Unmarshal([]byte(config), &cfg); err != nil {
+    if err := godotenv.Load(); err != nil {
         log.Fatal(err)
     }
 
+    cfg := app.NewConfig()
+
     go func() {
-        if err := app.Run(cfg); err != nil {
+        if err := app.Run(*cfg); err != nil {
             log.Fatal(err)
         }
 
