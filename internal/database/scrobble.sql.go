@@ -37,6 +37,49 @@ func (q *Queries) GetLatestTrack(ctx context.Context, uid int64) (GetLatestTrack
 	return i, err
 }
 
+const getRecentScrobbles = `-- name: GetRecentScrobbles :many
+SELECT artist_name, track_name, timestamp, duration
+FROM scrobbles
+WHERE uid = ?
+ORDER BY timestamp DESC
+LIMIT 5
+`
+
+type GetRecentScrobblesRow struct {
+	ArtistName string
+	TrackName  string
+	Timestamp  int64
+	Duration   int64
+}
+
+func (q *Queries) GetRecentScrobbles(ctx context.Context, uid int64) ([]GetRecentScrobblesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getRecentScrobbles, uid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRecentScrobblesRow
+	for rows.Next() {
+		var i GetRecentScrobblesRow
+		if err := rows.Scan(
+			&i.ArtistName,
+			&i.TrackName,
+			&i.Timestamp,
+			&i.Duration,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeScrobble = `-- name: RemoveScrobble :exec
 DELETE FROM scrobbles
 WHERE id = ?

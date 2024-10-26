@@ -137,6 +137,7 @@ func AppLoop(cfg *AppCfg) bool {
     }()
 
     go func() {
+        outerRange :
         for v := range output {
             switch v := v.(type) {
             case SpotifyListenValue:
@@ -154,6 +155,32 @@ func AppLoop(cfg *AppCfg) bool {
                     Uid: int(user.ID),
                     Progress: v.Song.Progress,
                 }); ok {
+                    scrobbles, _ := cfg.database.GetRecentScrobbles(context.Background(), user.ID)
+                    scrobbleTime := time.Unix(int64(v.Song.Timestamp) / 1000, 0)
+                    dontTweet := false
+
+                    innerRange :
+                    for _, recent := range scrobbles {
+                        recentTime := time.Unix(recent.Timestamp / 1000, 0)
+
+                        if recent.ArtistName == v.Song.Artist && recent.TrackName == v.Song.Name {
+                            if recentTime.Add(time.Hour * 2).Before(scrobbleTime) {
+                                break innerRange
+                            }
+
+                            if recentTime == scrobbleTime {
+                                continue innerRange
+                            }
+
+                            dontTweet = true
+                            break innerRange
+                        }
+                    }
+
+                    if dontTweet {
+                        continue outerRange
+                    }
+
                     twitter := NewTwitter(v.Username, TwitterConfig(cfg.config.Twitter), cfg.database)
 
                     err := twitter.AuthWithDB(cfg.ctx)
