@@ -1,5 +1,5 @@
 # Now Playing
-Send your last.fm recently played track to social media feeds
+Scrobble your Spotify listens and share to social media feeds
 
 ## Setup
 
