@@ -7,4 +7,4 @@ Copy `.env.sample` to `.env` and fill out
 Can also just set env variables without using .env
 
 ## Run
-`go run cmd/nowplaying/main.go`
+`docker-compose up`

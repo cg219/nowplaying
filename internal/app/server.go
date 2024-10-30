@@ -9,7 +9,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
-	_ "net/http/pprof"
+	// _ "net/http/pprof"
 	"os"
 	"strings"
 	"time"
@@ -394,9 +394,5 @@ func StartServer(cfg *AppCfg) error {
 
     addRoutes(srv)
 
-    go func() {
-        http.ListenAndServe("localhost:3005", nil)
-    }()
-
-    return http.ListenAndServe("localhost:3006", srv.mux)
+    return http.ListenAndServe(fmt.Sprintf("0.0.0.0:%s", os.Getenv("PORT")), srv.mux)
 }

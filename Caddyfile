@@ -1,0 +1,4 @@
+localhost:3006 {
+    reverse_proxy nowplaying:8080
+}
+

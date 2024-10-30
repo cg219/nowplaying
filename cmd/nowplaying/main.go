@@ -8,16 +8,11 @@ import (
 	"syscall"
 
 	"github.com/cg219/nowplaying/internal/app"
-	"github.com/joho/godotenv"
 )
 
 func main() {
     ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
     defer stop()
-
-    if err := godotenv.Load(); err != nil {
-        log.Fatal(err)
-    }
 
     cfg := app.NewConfig()
 
