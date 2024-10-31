@@ -217,7 +217,7 @@ func GetSpotifyAuthURL(ctx context.Context, username string, config SpotifyConfi
     vals.Add("client_id", config.Id)
     vals.Add("state", state)
     vals.Add("redirect_uri", config.Redirect)
-    vals.Add("scope", "user-read-currently-playing user-read-playback-state")
+    vals.Add("scope", "user-read-currently-playing user-read-playback-state user-read-private user-read-email")
     req.URL.RawQuery = vals.Encode()
 
     db.SaveSpotifySession(ctx, database.SaveSpotifySessionParams{
