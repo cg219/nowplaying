@@ -103,9 +103,12 @@ func (s *Scrobbler) Scrobble(ctx context.Context, sc Scrobble) bool {
     dbValue, err := s.db.GetLatestTrack(ctx, int64(sc.Uid))
 
     if err == sql.ErrNoRows {
+        log.Println("Scrobb Err", sc, err)
         s.db.SaveScrobble(ctx, scrobbleToParams(sc))
         return false
     }
+
+    log.Println("SC: ", sc, dbValue)
 
     if sc.ArtistName == dbValue.ArtistName &&
         sc.TrackName == dbValue.TrackName &&
@@ -125,6 +128,7 @@ func (s *Scrobbler) Scrobble(ctx context.Context, sc Scrobble) bool {
     }
 
     s.db.SaveScrobble(ctx, scrobbleToParams(sc))
+    log.Println("Scrobb", sc)
     return true
 }
 

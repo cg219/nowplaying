@@ -8,6 +8,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"fmt"
 )
 
 const getLatestTrack = `-- name: GetLatestTrack :one
@@ -28,6 +29,7 @@ type GetLatestTrackRow struct {
 func (q *Queries) GetLatestTrack(ctx context.Context, uid int64) (GetLatestTrackRow, error) {
 	row := q.db.QueryRowContext(ctx, getLatestTrack, uid)
 	var i GetLatestTrackRow
+    fmt.Println("ROW:", row)
 	err := row.Scan(
 		&i.ArtistName,
 		&i.TrackName,

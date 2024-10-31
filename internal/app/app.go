@@ -192,7 +192,7 @@ func AppLoop(cfg *AppCfg) bool {
                     playing := fmt.Sprintf("%s - %s", v.Song.Artist, v.Song.Name)
                     tweet := fmt.Sprintf("Now Playing\n\n%s\nLink: %s\n", playing, yts.Search(playing))
                     log.Println(tweet)
-                    twitter.Tweet(tweet)
+                    // twitter.Tweet(tweet)
                 }
 
             }
