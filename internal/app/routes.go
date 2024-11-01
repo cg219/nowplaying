@@ -192,6 +192,7 @@ func (s *Server) SpotifyRedirect(w http.ResponseWriter, r *http.Request) error {
         s.authCfg.database.SaveSpotifySession(r.Context(), database.SaveSpotifySessionParams{
             SpotifyAccessToken: sql.NullString{ String: res.AccessToken, Valid: true },
             SpotifyRefreshToken: sql.NullString{ String: res.RefreshToken, Valid: true },
+            SpotifyID: sql.NullString{ String: res.Id, Valid: true },
             Username: username,
         })
     }

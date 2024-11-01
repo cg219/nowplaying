@@ -63,6 +63,9 @@ func NewServer(cfg *AppCfg) *Server {
 }
 
 func addRoutes(srv *Server) {
+    srv.mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(http.StatusNotFound)
+    })
     srv.mux.Handle("GET /", srv.handle(srv.RedirectAuthenticated("/settings", true), srv.getLoginPage))
     srv.mux.Handle("POST /api/login", srv.handle(srv.LogUserIn))
     srv.mux.Handle("GET /api/last-scrobble", srv.handle(srv.UserOnly, srv.GetLastScrobble))
@@ -115,7 +118,6 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
     if err != nil && err != sql.ErrNoRows {
         return err
     }
-
 
     page := &struct{
         SpotifyTrack string

@@ -41,6 +41,8 @@ type User struct {
 	Username             string
 	SpotifyAccessToken   sql.NullString
 	SpotifyRefreshToken  sql.NullString
+	SpotifyID            sql.NullString
+	SpotifyAuthState     sql.NullString
 	LastfmSessionName    sql.NullString
 	LastfmSessionKey     sql.NullString
 	Password             interface{}
@@ -48,5 +50,4 @@ type User struct {
 	TwitterRequestSecret sql.NullString
 	TwitterOauthToken    sql.NullString
 	TwitterOauthSecret   sql.NullString
-	SpotifyAuthState     sql.NullString
 }
