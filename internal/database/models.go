@@ -50,4 +50,6 @@ type User struct {
 	TwitterRequestSecret sql.NullString
 	TwitterOauthToken    sql.NullString
 	TwitterOauthSecret   sql.NullString
+	Reset                sql.NullString
+	ResetTime            sql.NullInt64
 }

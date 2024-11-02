@@ -7,7 +7,31 @@ package database
 
 import (
 	"context"
+	"database/sql"
 )
+
+const canResetPassword = `-- name: CanResetPassword :one
+SELECT reset_time > ? AS valid, username
+FROM users
+WHERE reset = ?
+`
+
+type CanResetPasswordParams struct {
+	ResetTime sql.NullInt64
+	Reset     sql.NullString
+}
+
+type CanResetPasswordRow struct {
+	Valid    bool
+	Username string
+}
+
+func (q *Queries) CanResetPassword(ctx context.Context, arg CanResetPasswordParams) (CanResetPasswordRow, error) {
+	row := q.db.QueryRowContext(ctx, canResetPassword, arg.ResetTime, arg.Reset)
+	var i CanResetPasswordRow
+	err := row.Scan(&i.Valid, &i.Username)
+	return i, err
+}
 
 const getUser = `-- name: GetUser :one
 SELECT id, username
@@ -45,6 +69,25 @@ func (q *Queries) GetUserWithPassword(ctx context.Context, username string) (Get
 	return i, err
 }
 
+const resetPassword = `-- name: ResetPassword :exec
+UPDATE users
+SET reset = NULL,
+    reset_time = NULL,
+    password = ?
+WHERE reset = ? AND reset_time > ?
+`
+
+type ResetPasswordParams struct {
+	Password  interface{}
+	Reset     sql.NullString
+	ResetTime sql.NullInt64
+}
+
+func (q *Queries) ResetPassword(ctx context.Context, arg ResetPasswordParams) error {
+	_, err := q.db.ExecContext(ctx, resetPassword, arg.Password, arg.Reset, arg.ResetTime)
+	return err
+}
+
 const saveUser = `-- name: SaveUser :exec
 INSERT INTO users(username, password)
 VALUES(?, ?)
@@ -57,5 +100,23 @@ type SaveUserParams struct {
 
 func (q *Queries) SaveUser(ctx context.Context, arg SaveUserParams) error {
 	_, err := q.db.ExecContext(ctx, saveUser, arg.Username, arg.Password)
+	return err
+}
+
+const setPasswordReset = `-- name: SetPasswordReset :exec
+UPDATE users
+SET reset = ?,
+    reset_time = ?
+WHERE username = ?
+`
+
+type SetPasswordResetParams struct {
+	Reset     sql.NullString
+	ResetTime sql.NullInt64
+	Username  string
+}
+
+func (q *Queries) SetPasswordReset(ctx context.Context, arg SetPasswordResetParams) error {
+	_, err := q.db.ExecContext(ctx, setPasswordReset, arg.Reset, arg.ResetTime, arg.Username)
 	return err
 }
