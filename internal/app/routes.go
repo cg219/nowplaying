@@ -39,6 +39,8 @@ func (s *Server) ResetPassword(w http.ResponseWriter, r *http.Request) error {
         Password: hashPass,
     })
 
+    http.Redirect(w, r, "/", http.StatusSeeOther)
+
     return nil
 }
 

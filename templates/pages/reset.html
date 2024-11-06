@@ -19,6 +19,7 @@
                 {{ if .Valid }}
                 <form class="container" id="reset" method="POST" action="/api/reset-password" hx-boost="true">
                     <input type="hidden" name="username" value="{{ .Username }}" />
+                    <input type="hidden" name="reset" value="{{ .Reset }}" />
                     <input type="password" name="password" placeholder="Password" />
                     <input type="password" name="password-confirm" placeholder="Confirm Password" />
                     <button type="submit">Reset Password</button>

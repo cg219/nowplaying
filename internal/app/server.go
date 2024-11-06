@@ -112,7 +112,8 @@ func (s *Server) getResetPage(w http.ResponseWriter, r *http.Request) error {
     page := &struct{
         Valid bool
         Username string
-    }{ Valid: dbValue.Valid, Username: dbValue.Username }
+        Reset string
+    }{ Valid: dbValue.Valid, Username: dbValue.Username, Reset: reset }
 
     tmpl := template.Must(template.ParseFiles("templates/pages/reset.html"))
     tmpl.Execute(w, page)
