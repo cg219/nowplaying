@@ -24,10 +24,10 @@ func (s *Server) ResetPassword(w http.ResponseWriter, r *http.Request) error {
     }
 
     pass := r.FormValue("password")
-    passconrim := r.FormValue("password-confirm")
+    passconfirm := r.FormValue("password-confirm")
     reset := r.FormValue("reset")
 
-    if !strings.EqualFold(pass, passconrim) {
+    if !strings.EqualFold(pass, passconfirm) {
         return fmt.Errorf(AUTH_ERROR)
     }
 
