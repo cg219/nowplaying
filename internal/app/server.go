@@ -63,9 +63,14 @@ func NewServer(cfg *AppCfg) *Server {
 }
 
 func addRoutes(srv *Server) {
+    srv.mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(http.StatusNotFound)
+    })
     srv.mux.Handle("GET /", srv.handle(srv.RedirectAuthenticated("/settings", true), srv.getLoginPage))
     srv.mux.Handle("POST /api/login", srv.handle(srv.LogUserIn))
     srv.mux.Handle("GET /api/last-scrobble", srv.handle(srv.UserOnly, srv.GetLastScrobble))
+    srv.mux.Handle("POST /api/forgot-password", srv.handle(srv.ForgotPassword))
+    srv.mux.Handle("POST /api/reset-password", srv.handle(srv.ResetPassword))
     srv.mux.Handle("POST /api/spotify", srv.handle(srv.UserOnly, srv.AddSpotify))
     srv.mux.Handle("DELETE /api/spotify", srv.handle(srv.UserOnly, srv.RemoveSpotify))
     srv.mux.Handle("GET /auth/spotify-redirect", srv.handle(srv.SpotifyRedirect))
@@ -75,6 +80,7 @@ func addRoutes(srv *Server) {
     srv.mux.Handle("GET /test/x", srv.handle(srv.UserOnly, srv.Test))
     srv.mux.Handle("GET /me", srv.handle(srv.RedirectAuthenticated("/", false), srv.getUserPage))
     srv.mux.Handle("GET /settings", srv.handle(srv.RedirectAuthenticated("/", false), srv.getSettingsPage))
+    srv.mux.Handle("GET /reset/{resetvalue}", srv.handle(srv.getResetPage))
 }
 
 func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +98,25 @@ func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) getUserPage(w http.ResponseWriter, r *http.Request) error {
     tmpl := template.Must(template.ParseFiles("templates/pages/user.html"))
     tmpl.Execute(w, nil)
+    return nil
+}
+
+func (s *Server) getResetPage(w http.ResponseWriter, r *http.Request) error {
+    reset := r.PathValue("resetvalue")
+
+    dbValue, _ := s.authCfg.database.CanResetPassword(r.Context(), database.CanResetPasswordParams{
+        ResetTime: sql.NullInt64{ Int64: time.Now().Unix(), Valid: true },
+        Reset: sql.NullString{ String: reset, Valid: true },
+    })
+
+    page := &struct{
+        Valid bool
+        Username string
+        Reset string
+    }{ Valid: dbValue.Valid, Username: dbValue.Username, Reset: reset }
+
+    tmpl := template.Must(template.ParseFiles("templates/pages/reset.html"))
+    tmpl.Execute(w, page)
     return nil
 }
 
@@ -115,7 +140,6 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
     if err != nil && err != sql.ErrNoRows {
         return err
     }
-
 
     page := &struct{
         SpotifyTrack string

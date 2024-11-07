@@ -1,6 +1,7 @@
 package app
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
@@ -13,6 +14,63 @@ import (
 	"github.com/cg219/nowplaying/internal/database"
 	"github.com/dghubble/oauth1"
 )
+
+func (s *Server) ResetPassword(w http.ResponseWriter, r *http.Request) error {
+    resettimer := time.Now().Unix()
+    err := r.ParseForm()
+
+    if err != nil {
+        s.log.Error("parsing form", "err", err)
+    }
+
+    pass := r.FormValue("password")
+    passconfirm := r.FormValue("password-confirm")
+    reset := r.FormValue("reset")
+
+    if !strings.EqualFold(pass, passconfirm) {
+        return fmt.Errorf(AUTH_ERROR)
+    }
+
+    hashPass, _ := s.hasher.EncodeFromString(pass)
+
+    s.authCfg.database.ResetPassword(r.Context(), database.ResetPasswordParams{
+        Reset: sql.NullString{ String: reset, Valid: true },
+        ResetTime: sql.NullInt64{ Int64: resettimer, Valid: true },
+        Password: hashPass,
+    })
+
+    http.Redirect(w, r, "/", http.StatusSeeOther)
+
+    return nil
+}
+
+func (s *Server) ForgotPassword(w http.ResponseWriter, r *http.Request) error {
+    resettimer := time.Now().Add(time.Minute * 15).Unix()
+    resetbytes := make([]byte, 32)
+    rand.Read(resetbytes)
+    reset := base64.URLEncoding.EncodeToString(resetbytes)[:16]
+    err := r.ParseForm()
+
+    if err != nil {
+        s.log.Error("parsing form", "err", err)
+    }
+
+    username := r.FormValue("username")
+
+    err = s.authCfg.database.SetPasswordReset(r.Context(), database.SetPasswordResetParams{
+        Reset: sql.NullString{ String: reset, Valid: true },
+        ResetTime: sql.NullInt64{ Int64: resettimer, Valid: true },
+        Username: username,
+    })
+    
+    if err != nil {
+        s.log.Error("resetting pass", "err", err)
+    }
+
+    s.log.Info("Reset Link:", "url", fmt.Sprintf("http://localhost:%s/reset/%s", "3006", reset))
+
+    return nil
+}
 
 func (s *Server) AddSpotify(w http.ResponseWriter, r *http.Request) error {
     user, err := s.authCfg.database.GetUser(r.Context(), r.Context().Value("username").(string))
@@ -192,6 +250,7 @@ func (s *Server) SpotifyRedirect(w http.ResponseWriter, r *http.Request) error {
         s.authCfg.database.SaveSpotifySession(r.Context(), database.SaveSpotifySessionParams{
             SpotifyAccessToken: sql.NullString{ String: res.AccessToken, Valid: true },
             SpotifyRefreshToken: sql.NullString{ String: res.RefreshToken, Valid: true },
+            SpotifyID: sql.NullString{ String: res.Id, Valid: true },
             Username: username,
         })
     }

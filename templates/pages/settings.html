@@ -1,7 +1,7 @@
 <html>
     <head>
         <title>Now Playing</title>
-        <script src="https://unpkg.com/htmx.org@2.0.2" integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ" crossorigin="anonymous"></script>
+        <script src="https://unpkg.com/htmx.org@2.0.3" integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq" crossorigin="anonymous"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css" integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w==" crossorigin="anonymous" referrerpolicy="no-referrer" />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.cyan.min.css">
         <!-- <link rel="stylesheet" href="/sf/styles.css"> -->
@@ -38,6 +38,11 @@
                         </a>
                     </fieldset>
                     {{end}}
+                    <fieldset>
+                        <label for="reset-pass">Reset Password</label>
+                        <input type="text" name="username" placeholder="Username" />
+                        <input type="button" name="reset-pass" value="Reset Password"/>
+                    </fieldset>
                 </form>
             </main>
         </section>
@@ -55,6 +60,20 @@
                     })
                 }
                 console.log(evt.target.checked)
+            })
+            htmx.on('input[name="reset-pass"]', "click", async(evt) => {
+                const data = new URLSearchParams();
+                const username = htmx.find('input[name="username"]').value;
+
+                data.append("username", username)
+
+                await fetch("/api/forgot-password", {
+                    headers: {
+                        "Content-type": "application/x-www-form-urlencoded"
+                    },
+                    method: "POST",
+                    body: data
+                })
             })
         })
         </script>

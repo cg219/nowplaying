@@ -28,7 +28,8 @@ WHERE username = ?;
 UPDATE users
 SET spotify_access_token = ?,
     spotify_refresh_token = ?,
-    spotify_auth_state = ?
+    spotify_auth_state = ?,
+    spotify_id = ?
 WHERE username = ?;
 
 -- name: SaveTwitterSession :exec
@@ -41,7 +42,8 @@ WHERE username = ?;
 
 -- name: UpdateSpotifyAccessToken :exec
 UPDATE users
-SET spotify_access_token = ?
+SET spotify_access_token = ?,
+    spotify_id = ?
 WHERE username = ?;
 
 -- name: GetUserSession :one

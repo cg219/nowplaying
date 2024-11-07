@@ -15,16 +15,22 @@
                 </hgroup>
             </header>
             <section>
-                <h1>Last Scrobble</h1>
-                <div class="last-scrobble" hx-get="/api/last-scrobble" hx-trigger="load, every 10s" hx-swap="innerHTML">
-                    <p class="artist"></p>
-                    <p class="track"></p>
-                    <p class="date"></p>
-                </div>
+                <h1>Reset Password</h1>
+                {{ if .Valid }}
+                <form class="container" id="reset" method="POST" action="/api/reset-password" hx-boost="true">
+                    <input type="hidden" name="username" value="{{ .Username }}" />
+                    <input type="hidden" name="reset" value="{{ .Reset }}" />
+                    <input type="password" name="password" placeholder="Password" />
+                    <input type="password" name="password-confirm" placeholder="Confirm Password" />
+                    <button type="submit">Reset Password</button>
+                </form>
+                {{else}}
+                <p>Invalid Reset Link</p>
+                <a href="/">Go Back Home and Login</a>
+                {{end}}
             </section>
         </main>
     </body>
 </html>
-
 
 

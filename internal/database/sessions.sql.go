@@ -292,7 +292,8 @@ const saveSpotifySession = `-- name: SaveSpotifySession :exec
 UPDATE users
 SET spotify_access_token = ?,
     spotify_refresh_token = ?,
-    spotify_auth_state = ?
+    spotify_auth_state = ?,
+    spotify_id = ?
 WHERE username = ?
 `
 
@@ -300,6 +301,7 @@ type SaveSpotifySessionParams struct {
 	SpotifyAccessToken  sql.NullString
 	SpotifyRefreshToken sql.NullString
 	SpotifyAuthState    sql.NullString
+	SpotifyID           sql.NullString
 	Username            string
 }
 
@@ -308,6 +310,7 @@ func (q *Queries) SaveSpotifySession(ctx context.Context, arg SaveSpotifySession
 		arg.SpotifyAccessToken,
 		arg.SpotifyRefreshToken,
 		arg.SpotifyAuthState,
+		arg.SpotifyID,
 		arg.Username,
 	)
 	return err
@@ -358,16 +361,18 @@ func (q *Queries) SaveUserSession(ctx context.Context, arg SaveUserSessionParams
 
 const updateSpotifyAccessToken = `-- name: UpdateSpotifyAccessToken :exec
 UPDATE users
-SET spotify_access_token = ?
+SET spotify_access_token = ?,
+    spotify_id = ?
 WHERE username = ?
 `
 
 type UpdateSpotifyAccessTokenParams struct {
 	SpotifyAccessToken sql.NullString
+	SpotifyID          sql.NullString
 	Username           string
 }
 
 func (q *Queries) UpdateSpotifyAccessToken(ctx context.Context, arg UpdateSpotifyAccessTokenParams) error {
-	_, err := q.db.ExecContext(ctx, updateSpotifyAccessToken, arg.SpotifyAccessToken, arg.Username)
+	_, err := q.db.ExecContext(ctx, updateSpotifyAccessToken, arg.SpotifyAccessToken, arg.SpotifyID, arg.Username)
 	return err
 }

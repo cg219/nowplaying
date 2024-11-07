@@ -42,6 +42,7 @@ type SpotifyTokenResp struct {
     AccessToken string `json:"access_token"`
     RefreshToken string `json:"refresh_token"`
     Scope string `json:"scope"`
+    Id string `json:"id"`
 }
 
 type SpotifyPlayingResp struct {
@@ -217,7 +218,7 @@ func GetSpotifyAuthURL(ctx context.Context, username string, config SpotifyConfi
     vals.Add("client_id", config.Id)
     vals.Add("state", state)
     vals.Add("redirect_uri", config.Redirect)
-    vals.Add("scope", "user-read-currently-playing user-read-playback-state")
+    vals.Add("scope", "user-read-currently-playing user-read-playback-state user-read-private user-read-email")
     req.URL.RawQuery = vals.Encode()
 
     db.SaveSpotifySession(ctx, database.SaveSpotifySessionParams{
@@ -269,7 +270,22 @@ func GetSpotifyTokens(ctx context.Context, code string, config SpotifyConfig) (S
     if err != nil {
         return data, err
     }
-    
+
+    req2, _ := http.NewRequestWithContext(ctx, "GET", "https://api.spotify.com/v1/me", nil)
+    req2.Header.Add("Authorization", fmt.Sprintf("Bearer %s", data.AccessToken))
+
+    resp2, err := client.Do(req2)
+    if err != nil {
+        return data, err
+    }
+
+    defer resp2.Body.Close()
+
+    err = json.NewDecoder(resp2.Body).Decode(&data)
+    if err != nil {
+        return data, err
+    }
+
     return data, nil
 }
 
@@ -299,8 +315,24 @@ func (s *Spotify) RefreshSpotifyTokens(ctx context.Context) error {
         return err
     }
     
+    req2, _ := http.NewRequestWithContext(ctx, "GET", "https://api.spotify.com/v1/me", nil)
+    req2.Header.Add("Authorization", fmt.Sprintf("Bearer %s", data.AccessToken))
+
+    resp2, err := s.client.Do(req2)
+    if err != nil {
+        return err
+    }
+
+    defer resp2.Body.Close()
+
+    err = json.NewDecoder(resp2.Body).Decode(&data)
+    if err != nil {
+        return err
+    }
+
     s.db.UpdateSpotifyAccessToken(ctx, database.UpdateSpotifyAccessTokenParams{
         SpotifyAccessToken: sql.NullString{ String: data.AccessToken, Valid: true },
+        SpotifyID: sql.NullString{ String: data.Id, Valid: true },
         Username: s.Username,
     })
 
