@@ -256,7 +256,7 @@ func Run(config Config) error {
 
 
     for _, r := range results {
-        log.Println("goose: %s, %s", r.Source.Path, r.Duration)
+        log.Printf("goose: %s, %s\n", r.Source.Path, r.Duration)
     }
 
     cfg.database = database.New(db)
