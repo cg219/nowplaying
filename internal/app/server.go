@@ -7,8 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"log/slog"
 	"net/http"
+	"path/filepath"
+
 	// _ "net/http/pprof"
 	"os"
 	"strings"
@@ -25,6 +28,7 @@ type Server struct {
     authCfg *AppCfg
     log *slog.Logger
     hasher *argon2id.Argon2id
+    tmpl *template.Template
 }
 
 type SuccessResp struct {
@@ -35,6 +39,19 @@ type ResponseError struct {
     Code int `json:"code"`
     Success bool `json:"success"`
     Messaage string `json:"message"`
+}
+
+type NavLink struct {
+    Current bool
+    Name string
+    Url string
+}
+
+type Page struct {
+    SiteTitle string
+    Title string
+    Subtitle string
+    NavLinks []NavLink
 }
 
 type CandlerFunc func(w http.ResponseWriter, r *http.Request) error
@@ -54,11 +71,19 @@ const (
 )
 
 func NewServer(cfg *AppCfg) *Server {
+    paths, err := filepath.Glob("templates/pages/*.html")
+    if err != nil {
+        log.Fatal("templates are missing")
+    }
+
+    paths = append(paths, "templates/base.layout.html")
+
     return &Server{
         mux: http.NewServeMux(),
         authCfg: cfg,
         log: slog.New(slog.NewTextHandler(os.Stderr, nil)),
         hasher: argon2id.NewArgon2id(16 * 1024, 2, 1, 16, 32),
+        tmpl: template.Must(template.ParseFiles(paths...)),
     }
 }
 
@@ -90,14 +115,26 @@ func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
-    tmpl := template.Must(template.ParseFiles("templates/pages/auth.html"))
-    tmpl.Execute(w, nil)
+    page := Page{
+        SiteTitle: "Now Playing",
+        Title: "Login",
+        Subtitle: "Sign into platform",
+    }
+    s.tmpl.ExecuteTemplate(w, "auth.html", page)
     return nil
 }
 
 func (s *Server) getUserPage(w http.ResponseWriter, r *http.Request) error {
-    tmpl := template.Must(template.ParseFiles("templates/pages/user.html"))
-    tmpl.Execute(w, nil)
+    page := Page{
+        SiteTitle: "Now Playing - My Page",
+        Title: "My Page",
+        Subtitle: "See my activity",
+        NavLinks: []NavLink{
+            { Name: "My Page", Current: true, Url: "/me"},
+            { Name: "Settings", Url: "/settings"},
+        },
+    }
+    s.tmpl.ExecuteTemplate(w, "user.html", page)
     return nil
 }
 
@@ -115,8 +152,7 @@ func (s *Server) getResetPage(w http.ResponseWriter, r *http.Request) error {
         Reset string
     }{ Valid: dbValue.Valid, Username: dbValue.Username, Reset: reset }
 
-    tmpl := template.Must(template.ParseFiles("templates/pages/reset.html"))
-    tmpl.Execute(w, page)
+    s.tmpl.ExecuteTemplate(w, "reset.html", page)
     return nil
 }
 
@@ -147,7 +183,16 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
         SpotifyOn bool
         TwitterOn bool
         TwitterAuthURL string
+        Page
     }{}
+
+    page.SiteTitle = "Now Playing - Settings"
+    page.Title = "Settings"
+    page.Subtitle = "Configure your preferences"
+    page.NavLinks = []NavLink{
+        { Name: "My Page", Url: "/me"},
+        { Name: "Settings", Current: true, Url: "/settings"},
+    }
 
     if spotify.SpotifyAccessToken.Valid && spotify.SpotifyRefreshToken.Valid {
         page.SpotifyOn = true
@@ -173,8 +218,7 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
         page.TwitterAuthURL = GetAuthURL(s.authCfg.ctx, s.authCfg.TwitterOAuth, s.authCfg.database, user.Username)
     }
 
-    tmpl := template.Must(template.ParseFiles("templates/pages/settings.html"))
-    tmpl.Execute(w, page)
+    s.tmpl.ExecuteTemplate(w, "settings.html", page)
     return nil
 }
 

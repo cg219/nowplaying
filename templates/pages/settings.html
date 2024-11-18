@@ -1,63 +1,36 @@
-<html>
-    <head>
-        <title>Now Playing</title>
-        <script src="https://unpkg.com/htmx.org@2.0.3" integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq" crossorigin="anonymous"></script>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css" integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.cyan.min.css">
-        <!-- <link rel="stylesheet" href="/sf/styles.css"> -->
-    </head>
-    <body hx-boost="true">
-        <main class="container">
-            <nav role="group">
-                <ul>
-                    <li>
-                        <hgroup>
-                            <h1>Spotify</h1>
-                            <p>Authorize music play scrobbling</p>
-                        </hgroup>
-                    </li>
-                </ul>
-                <ul>
-                    <li><a class="contrast" href="/me">My Page</a></li>
-                    <li><a href="/settings" aria-current="page">Settings</a></li>
-                </ul>
-            </nav>
+{{template "base" .}}
+{{ define "content"}}
+<form>
+    {{if .SpotifyOn}}
+    <fieldset>
+        <label for="spotify-session">Scrobble Spotify</label>
+        <input type="checkbox" name="spotify-session" role="switch" {{ .SpotifyTrack}}>
+    </fieldset>
+    {{else}}
+    <fieldset>
+        <label for="spotify-auth">Allow Spotify Access</label>
+        <a target="_self" href="{{.SpotifyAuthURL}}">
+            <input type="button" name="spotify-auth" value="Authorize with Spotify" />
+        </a>
+    </fieldset>
+    {{end}}
+    {{if not .TwitterOn}}
+    <fieldset>
+        <label for="x-auth">Allow X Access</label>
+        <a target="_self" href="{{.TwitterAuthURL}}">
+            <input type="button" name="x-auth" value="Authorize with X">
+        </a>
+    </fieldset>
+    {{end}}
+    <fieldset>
+        <label for="reset-pass">Reset Password</label>
+        <input type="text" name="username" placeholder="Username" />
+        <input type="button" name="reset-pass" value="Reset Password"/>
+    </fieldset>
+</form>
+{{end}}
 
-            <h1>Settings</h1>
-
-            <section>
-                <form>
-                    {{if .SpotifyOn}}
-                    <fieldset>
-                        <label for="spotify-session">Scrobble Spotify</label>
-                        <input type="checkbox" name="spotify-session" role="switch" {{ .SpotifyTrack}}>
-                    </fieldset>
-                    {{else}}
-                    <fieldset>
-                        <label for="spotify-auth">Allow Spotify Access</label>
-                        <a target="_self" href="{{.SpotifyAuthURL}}">
-                            <input type="button" name="spotify-auth" value="Authorize with Spotify" />
-                        </a>
-                    </fieldset>
-                    {{end}}
-                    {{if not .TwitterOn}}
-                    <fieldset>
-                        <label for="x-auth">Allow X Access</label>
-                        <a target="_self" href="{{.TwitterAuthURL}}">
-                            <input type="button" name="x-auth" value="Authorize with X">
-                        </a>
-                    </fieldset>
-                    {{end}}
-                    <fieldset>
-                        <label for="reset-pass">Reset Password</label>
-                        <input type="text" name="username" placeholder="Username" />
-                        <input type="button" name="reset-pass" value="Reset Password"/>
-                    </fieldset>
-                </form>
-            </section>
-        </main>
-
-        <script type="text/javascript">
+{{define "script"}}
         htmx.onLoad(() => {
             htmx.on('input[name="spotify-session"]', "change", async (evt) => {
                 if (evt.target.checked) {
@@ -86,6 +59,4 @@
                 })
             })
         })
-        </script>
-    </body>
-</html>
+{{end}}
