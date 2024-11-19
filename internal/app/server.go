@@ -1,16 +1,15 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 
 	// _ "net/http/pprof"
 	"os"
@@ -28,7 +27,6 @@ type Server struct {
     authCfg *AppCfg
     log *slog.Logger
     hasher *argon2id.Argon2id
-    tmpl *template.Template
 }
 
 type SuccessResp struct {
@@ -71,19 +69,11 @@ const (
 )
 
 func NewServer(cfg *AppCfg) *Server {
-    paths, err := filepath.Glob("templates/pages/*.html")
-    if err != nil {
-        log.Fatal("templates are missing")
-    }
-
-    paths = append(paths, "templates/base.layout.html")
-
     return &Server{
         mux: http.NewServeMux(),
         authCfg: cfg,
         log: slog.New(slog.NewTextHandler(os.Stderr, nil)),
         hasher: argon2id.NewArgon2id(16 * 1024, 2, 1, 16, 32),
-        tmpl: template.Must(template.ParseFiles(paths...)),
     }
 }
 
@@ -120,7 +110,8 @@ func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
         Title: "Login",
         Subtitle: "Sign into platform",
     }
-    s.tmpl.ExecuteTemplate(w, "auth.html", page)
+    tmpl := template.Must(template.ParseFiles("templates/pages/auth.html", "templates/base.layout.html"))
+    tmpl.Execute(w, page)
     return nil
 }
 
@@ -134,7 +125,8 @@ func (s *Server) getUserPage(w http.ResponseWriter, r *http.Request) error {
             { Name: "Settings", Url: "/settings"},
         },
     }
-    s.tmpl.ExecuteTemplate(w, "user.html", page)
+    tmpl := template.Must(template.ParseFiles("templates/pages/user.html", "templates/base.layout.html"))
+    tmpl.Execute(w, page)
     return nil
 }
 
@@ -152,7 +144,8 @@ func (s *Server) getResetPage(w http.ResponseWriter, r *http.Request) error {
         Reset string
     }{ Valid: dbValue.Valid, Username: dbValue.Username, Reset: reset }
 
-    s.tmpl.ExecuteTemplate(w, "reset.html", page)
+    tmpl := template.Must(template.ParseFiles("templates/pages/reset.html", "templates/base.layout.html"))
+    tmpl.Execute(w, page)
     return nil
 }
 
@@ -183,6 +176,7 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
         SpotifyOn bool
         TwitterOn bool
         TwitterAuthURL string
+        Javascript template.JS
         Page
     }{}
 
@@ -218,7 +212,12 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
         page.TwitterAuthURL = GetAuthURL(context.Background(), s.authCfg.TwitterOAuth, s.authCfg.database, user.Username)
     }
 
-    s.tmpl.ExecuteTemplate(w, "settings.html", page)
+    buffer := new(bytes.Buffer)
+    scripts := template.Must(template.ParseFiles("js/settings.js"))
+    scripts.Execute(buffer, nil)
+    page.Javascript = template.JS(buffer.String())
+    tmpl := template.Must(template.ParseFiles("templates/pages/settings.html", "templates/base.layout.html"))
+    tmpl.Execute(w, page)
     return nil
 }
 
