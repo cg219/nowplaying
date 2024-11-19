@@ -8,7 +8,7 @@ import (
 )
 
 func return500(w http.ResponseWriter) {
-    encode[ResponseError](w, 500, ResponseError{ Success: false, Messaage: INTERNAL_ERROR, Code: INTERNAL_SERVER_ERROR })
+    encode(w, 500, ResponseError{ Success: false, Messaage: INTERNAL_ERROR, Code: INTERNAL_SERVER_ERROR })
 }
 
 func encode[T any](w http.ResponseWriter, status int, v T) error {

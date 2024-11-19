@@ -47,7 +47,6 @@ type Config struct {
 type AppCfg struct {
     config Config
     username string
-    ctx context.Context
     LastFMSession *LastFM
     TwitterOAuth oauth1.Config
     listenInterval time.Ticker
@@ -84,8 +83,7 @@ func NewConfig() *Config {
 
 func AppLoop(cfg *AppCfg) bool {
     cfg.haveNewSessions = false
-    ctx := cfg.ctx
-    encodedSessions, _ := cfg.database.GetActiveMusicSessions(ctx)
+    encodedSessions, _ := cfg.database.GetActiveMusicSessions(context.Background())
     sessions := []Session{}
     restartLoop := false
 
@@ -102,7 +100,7 @@ func AppLoop(cfg *AppCfg) bool {
         }
     }
 
-    yts := NewYoutube(ctx)
+    yts := NewYoutube(context.Background())
     exit := make(chan struct{})
     output := make(chan any)
     listening := make(chan bool)
@@ -112,8 +110,8 @@ func AppLoop(cfg *AppCfg) bool {
 
     for _, s := range sessions {
         go func() {
-            s.AuthWithDB(ctx)
-            s.Listen(ctx, &output, listening);
+            s.AuthWithDB(context.Background())
+            s.Listen(context.Background(), &output, listening);
 
             for {
                 select {
@@ -141,7 +139,7 @@ func AppLoop(cfg *AppCfg) bool {
         for v := range output {
             switch v := v.(type) {
             case SpotifyListenValue:
-                user, _ := cfg.database.GetUser(cfg.ctx, v.Username)
+                user, _ := cfg.database.GetUser(context.Background(), v.Username)
                 scrobbler := NewScrobbler(v.Username, cfg.database)
                 if ok := scrobbler.Scrobble(context.Background(), Scrobble{
                     ArtistName: v.Song.Artist,
@@ -183,7 +181,7 @@ func AppLoop(cfg *AppCfg) bool {
 
                     twitter := NewTwitter(v.Username, TwitterConfig(cfg.config.Twitter), cfg.database)
 
-                    err := twitter.AuthWithDB(cfg.ctx)
+                    err := twitter.AuthWithDB(context.Background())
                     if err != nil {
                         log.Printf("Oops: %s", err)
                         continue
@@ -213,7 +211,6 @@ func Run(config Config) error {
         config: config,
         username: config.App.Name,
         listenInterval: *time.NewTicker(5 * time.Second),
-        ctx: context.Background(),
         TwitterOAuth: oauth1.Config {
             ConsumerKey: config.Twitter.Id,
             ConsumerSecret: config.Twitter.Secret,

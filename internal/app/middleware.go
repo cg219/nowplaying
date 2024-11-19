@@ -15,13 +15,13 @@ func (s *Server) handle(h ...CandlerFunc) http.Handler {
             if err := currentHandler(w, r); err != nil {
                 switch err.Error() {
                 case USERNAME_EXISTS_ERROR:
-                    if err := encode[ResponseError](w, 409, ResponseError{ Success: false, Messaage: "Username Taken", Code: CODE_USER_EXISTS }); err != nil {
+                    if err := encode(w, 409, ResponseError{ Success: false, Messaage: "Username Taken", Code: CODE_USER_EXISTS }); err != nil {
                         return500(w)
                     }
                     return
 
                 case AUTH_ERROR:
-                    if err := encode[ResponseError](w, 404, ResponseError{ Success: false, Messaage: "Username/Password Incorrect", Code: AUTH_FAIL }); err != nil {
+                    if err := encode(w, 404, ResponseError{ Success: false, Messaage: "Username/Password Incorrect", Code: AUTH_FAIL }); err != nil {
                         return500(w)
                     }
                     return
@@ -39,7 +39,7 @@ func (s *Server) handle(h ...CandlerFunc) http.Handler {
                     return
                 }
 
-                s.log.Error("Uncaught Error", err)
+                s.log.Error("Uncaught Error", "error", err)
             }
         }
     })

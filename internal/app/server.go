@@ -215,7 +215,7 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
     if twitter.TwitterOauthToken.Valid && twitter.TwitterOauthSecret.Valid {
         page.TwitterOn = true
     } else {
-        page.TwitterAuthURL = GetAuthURL(s.authCfg.ctx, s.authCfg.TwitterOAuth, s.authCfg.database, user.Username)
+        page.TwitterAuthURL = GetAuthURL(context.Background(), s.authCfg.TwitterOAuth, s.authCfg.database, user.Username)
     }
 
     s.tmpl.ExecuteTemplate(w, "settings.html", page)
@@ -406,7 +406,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) error {
 
     existingUser, err := s.authCfg.database.GetUser(r.Context(), body.Username)
     if err != nil && err != sql.ErrNoRows {
-        s.log.Error("sql err: %w", err)
+        s.log.Error("sql err", "err", err)
         return fmt.Errorf(INTERNAL_ERROR)
     }
 
@@ -431,8 +431,8 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) error {
     }
 
     s.setTokens(w, r, body.Username)
-    encode[SuccessResp](w, http.StatusOK, SuccessResp{ Success: true })
-    s.log.Info("Register Body", body)
+    encode(w, http.StatusOK, SuccessResp{ Success: true })
+    s.log.Info("Register Body", "body", body)
     return nil
 }
 
@@ -452,8 +452,8 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) error {
     }
 
     s.setTokens(w, r, body.Username)
-    encode[SuccessResp](w, http.StatusOK, SuccessResp{ Success: true })
-    s.log.Info("Login Body", body)
+    encode(w, http.StatusOK, SuccessResp{ Success: true })
+    s.log.Info("Login", "body", body)
     return nil
 }
 

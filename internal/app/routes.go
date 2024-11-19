@@ -205,7 +205,7 @@ func (s *Server) Test(w http.ResponseWriter, r *http.Request) error {
 
     resp := TestResp{ Value: r.Context().Value("username").(string)}
     resp.Success = true
-    encode[TestResp](w, http.StatusOK, resp)
+    encode(w, http.StatusOK, resp)
     return nil
 }
 
