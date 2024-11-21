@@ -78,7 +78,12 @@ func (s *Server) RedirectAuthenticated(redirect string, onAuth bool) CandlerFunc
                 http.Redirect(w, r, redirect, http.StatusSeeOther)
                 return fmt.Errorf(REDIRECT_ERROR)
             } else {
-                return nil
+                if onAuth {
+                    return fmt.Errorf(GOTO_NEXT_HANDLER_ERROR)
+                } else {
+                    http.Redirect(w, r, redirect, http.StatusSeeOther)
+                    return fmt.Errorf(REDIRECT_ERROR)
+                }
             }
         }
 

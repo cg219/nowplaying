@@ -26,7 +26,7 @@
                     <li><a class="contrast" href="{{ .Url }}">{{ .Name }}</a></li>
                         {{end}}
                     {{end}}
-                    <li><a hx-trigger="click" hx-post="/api/logout" class="contrast" hx-boost="true">Logout</a></li>
+                    <li><a hx-trigger="click" hx-push-url="/" hx-swap="outerHTML" hx-target="body" hx-post="/api/logout" class="contrast">Logout</a></li>
                 </ul>
                 {{end}}
             </nav>
