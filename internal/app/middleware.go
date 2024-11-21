@@ -82,8 +82,10 @@ func (s *Server) RedirectAuthenticated(redirect string, onAuth bool) CandlerFunc
             }
         }
 
-        ok, username, refresh := s.isAuthenticated(r.Context(), cookieValue.AccessToken, cookieValue.RefreshToken)
+        ok, username, refresh, ctx := s.isAuthenticated(r.Context(), cookieValue.AccessToken, cookieValue.RefreshToken)
         if ok {
+            updatedRequest := r.WithContext(ctx)
+            *r = *updatedRequest
             s.authenticateRequest(r, username)
 
             if onAuth {
@@ -94,7 +96,9 @@ func (s *Server) RedirectAuthenticated(redirect string, onAuth bool) CandlerFunc
             }
         }
         if !ok && refresh != nil {
-            refresh(w)
+            ctx = refresh(w)
+            updatedRequest := r.WithContext(ctx)
+            *r = *updatedRequest
             s.authenticateRequest(r, username)
 
             if onAuth {
@@ -134,14 +138,18 @@ func (s *Server) UserOnly(w http.ResponseWriter, r *http.Request) error {
         return fmt.Errorf(AUTH_ERROR)
     }
 
-    ok, username, refresh := s.isAuthenticated(r.Context(), cookieValue.AccessToken, cookieValue.RefreshToken)
+    ok, username, refresh, ctx := s.isAuthenticated(r.Context(), cookieValue.AccessToken, cookieValue.RefreshToken)
     if ok {
+        updatedRequest := r.WithContext(ctx)
+        *r = *updatedRequest
         s.authenticateRequest(r, username)
         return nil
     }
 
     if !ok && refresh != nil {
-        refresh(w)
+        ctx = refresh(w)
+        updatedRequest := r.WithContext(ctx)
+        *r = *updatedRequest
         s.authenticateRequest(r, username)
         return nil
     }

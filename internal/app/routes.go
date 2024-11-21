@@ -197,6 +197,13 @@ func (s *Server) LogUserIn(w http.ResponseWriter, r *http.Request) error {
     return nil
 }
 
+func (s *Server) LogUserOut(w http.ResponseWriter, r *http.Request) error {
+    s.unsetTokens(w, r)
+    http.Redirect(w, r, "/", http.StatusSeeOther)
+    s.log.Info("Logout from FE")
+    return nil
+}
+
 func (s *Server) Test(w http.ResponseWriter, r *http.Request) error {
     type TestResp struct {
         SuccessResp

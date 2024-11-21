@@ -33,6 +33,11 @@ type SuccessResp struct {
     Success bool `json:"success"`
 }
 
+type TokenPacket struct{
+    AccessToken string
+    RefreshToken string
+}
+
 type ResponseError struct {
     Code int `json:"code"`
     Success bool `json:"success"`
@@ -83,6 +88,7 @@ func addRoutes(srv *Server) {
     })
     srv.mux.Handle("GET /", srv.handle(srv.RedirectAuthenticated("/settings", true), srv.getLoginPage))
     srv.mux.Handle("POST /api/login", srv.handle(srv.LogUserIn))
+    srv.mux.Handle("POST /api/logout", srv.handle(srv.UserOnly, srv.LogUserOut))
     srv.mux.Handle("GET /api/last-scrobble", srv.handle(srv.UserOnly, srv.GetLastScrobble))
     srv.mux.Handle("POST /api/forgot-password", srv.handle(srv.ForgotPassword))
     srv.mux.Handle("POST /api/reset-password", srv.handle(srv.ResetPassword))
@@ -92,6 +98,7 @@ func addRoutes(srv *Server) {
     srv.mux.Handle("GET /auth/x-redirect", srv.handle(srv.TwitterRedirect))
     srv.mux.Handle("POST /auth/register", srv.handle(srv.Register))
     srv.mux.Handle("POST /auth/login", srv.handle(srv.Login))
+    srv.mux.Handle("POST /auth/logout", srv.handle(srv.UserOnly, srv.Logout))
     srv.mux.Handle("GET /test/x", srv.handle(srv.UserOnly, srv.Test))
     srv.mux.Handle("GET /me", srv.handle(srv.RedirectAuthenticated("/", false), srv.getUserPage))
     srv.mux.Handle("GET /settings", srv.handle(srv.RedirectAuthenticated("/", false), srv.getSettingsPage))
@@ -237,6 +244,18 @@ func (s *Server) setTokens(w http.ResponseWriter, r *http.Request, username stri
     http.SetCookie(w, &cookie)
 }
 
+func (s *Server) unsetTokens(w http.ResponseWriter, r *http.Request) {
+    accesstoken := r.Context().Value("accesstoken").(string)
+    refreshtoken := r.Context().Value("refreshtoken").(string)
+    s.log.Info("unset tokens", "refresh", refreshtoken, "access", accesstoken)
+
+    s.authCfg.database.InvalidateUserSession(r.Context(), database.InvalidateUserSessionParams{ Accesstoken: accesstoken, Refreshtoken: refreshtoken, })
+    cookie := webtoken.NewAuthCookie("nowplaying", "/", webtoken.CookieAuthValue{}, int(0))
+
+    http.SetCookie(w, &cookie)
+    *r = *r.WithContext(context.Background())
+}
+
 func (s *Server) authenticateRequest(r *http.Request, username string) {
     ctx := context.WithValue(r.Context(), "username", username)
     updatedRequest := r.WithContext(ctx)
@@ -274,7 +293,7 @@ func (s *Server) login(ctx context.Context, username string, password string) bo
             return false
         }
 
-        s.log.Error("sql err: %w", err)
+        s.log.Error("sql err", "err", err)
         return false
     }
 
@@ -306,7 +325,7 @@ func (s* Server) refreshAccessToken(ctx context.Context, refreshExpire int64, re
     s.log.Info("Refresh User Tokens", "username", username)
 }
 
-func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, string, func(http.ResponseWriter)) {
+func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, string, func(http.ResponseWriter) context.Context, context.Context) {
     accessTokenExpired := true
     refreshTokenExpired := true
     accessToken, err := webtoken.GetParsedJWT(ats, "notsecure")
@@ -315,7 +334,7 @@ func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, st
 
         if !strings.Contains(err.Error(), jwt.ErrTokenExpired.Error()) {
             s.log.Error("Invalid AccessToken", "accessToken", ats, "method", "IsAuthenticated", "error", err.Error())
-            return false, "", nil
+            return false, "", nil, nil
         }
     } else {
         accessTokenExpired = false
@@ -325,7 +344,7 @@ func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, st
     if err != nil {
         if !strings.Contains(err.Error(), jwt.ErrTokenExpired.Error()) {
             s.log.Error("Invalid RefreshToken", "refreshToken", rts, "method", "isAuthenticated", "error", err.Error())
-            return false, "", nil
+            return false, "", nil, nil
         }
     } else {
         refreshTokenExpired = false
@@ -334,14 +353,14 @@ func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, st
     rfs, err := refreshToken.Claims.GetSubject()
     if err != nil {
         s.log.Error("Invalid RefreshToken", "method", "isAuthenticated", "error", err.Error())
-        return false, "", nil
+        return false, "", nil, nil
     }
 
     var rf webtoken.Subject
     err = json.Unmarshal([]byte(rfs), &rf)
     if err != nil {
         s.log.Error("Invalid RefreshToken", "refreshToken", rfs, "method", "isAuthenticated", "error", err.Error())
-        return false, "", nil
+        return false, "", nil, nil
     }
 
     if refreshTokenExpired {
@@ -350,7 +369,7 @@ func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, st
             Accesstoken: ats,
             Refreshtoken: rf.Value,
         })
-        return false, "", nil
+        return false, "", nil, nil
     }
 
     _, err = s.authCfg.database.GetUserSession(ctx, database.GetUserSessionParams{
@@ -359,20 +378,20 @@ func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, st
     })
     if err != nil {
         s.log.Error("Retreiving User Session", "method", "isAuthenticated", "error", err.Error())
-        return false, "", nil
+        return false, "", nil, nil
     }
 
     us, err := accessToken.Claims.GetSubject()
     if err != nil {
         s.log.Error("Invalid AccessToken", "method", "isAuthenticated", "error", err.Error())
-        return false, "", nil
+        return false, "", nil, nil
     }
 
     var username webtoken.Subject
     err = json.Unmarshal([]byte(us), &username)
     if err != nil {
         s.log.Error("Invalid AccessToken", "accessToken", us, "method", "isAuthenticated", "error", err.Error())
-        return false, "", nil
+        return false, "", nil, nil
     }
 
     if accessTokenExpired {
@@ -384,12 +403,19 @@ func (s *Server) isAuthenticated(ctx context.Context, ats, rts string) (bool, st
 
         expiresAt, _ := refreshToken.Claims.GetExpirationTime()
 
-        return false, username.Value, func(w http.ResponseWriter) {
+        return false, username.Value, func(w http.ResponseWriter) context.Context {
             s.refreshAccessToken(ctx, expiresAt.Unix(), rts, rf.Value, username.Value, w)
-        }
+            ctx = context.WithValue(ctx, "accesstoken", ats)
+            ctx = context.WithValue(ctx, "refreshtoken", rf.Value)
+
+            return ctx
+        }, nil
     }
 
-    return true, username.Value, nil
+    ctx = context.WithValue(ctx, "accesstoken", ats)
+    ctx = context.WithValue(ctx, "refreshtoken", rf.Value)
+
+    return true, username.Value, nil, ctx 
 }
 
 func (s *Server) Register(w http.ResponseWriter, r *http.Request) error {
@@ -453,6 +479,13 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) error {
     s.setTokens(w, r, body.Username)
     encode(w, http.StatusOK, SuccessResp{ Success: true })
     s.log.Info("Login", "body", body)
+    return nil
+}
+
+func (s *Server) Logout(w http.ResponseWriter, r *http.Request) error {
+    s.unsetTokens(w, r)
+    encode(w, http.StatusOK, SuccessResp{ Success: true })
+    s.log.Info("Logout", "success", true)
     return nil
 }
 
