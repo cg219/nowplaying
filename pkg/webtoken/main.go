@@ -40,11 +40,23 @@ func NewToken(name, subject, secret string, expires time.Time) Token {
 }
 
 func NewAuthCookie(name, path string, value CookieAuthValue, maxage int) http.Cookie {
-    encodedValue, _ := json.Marshal(value)
+    if value.AccessToken != "" {
+        encodedValue, _ := json.Marshal(value)
+
+        return http.Cookie{
+            Name: fmt.Sprintf("%s", name),
+            Value: base64.StdEncoding.EncodeToString(encodedValue),
+            Path: path,
+            MaxAge: maxage,
+            HttpOnly: true,
+            Secure: true,
+            SameSite: http.SameSiteLaxMode,
+        }
+    }
 
     return http.Cookie{
         Name: fmt.Sprintf("%s", name),
-        Value: base64.StdEncoding.EncodeToString(encodedValue),
+        Value: "", 
         Path: path,
         MaxAge: maxage,
         HttpOnly: true,
