@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 
@@ -104,30 +105,39 @@ func AppLoop(cfg *AppCfg) bool {
     exit := make(chan struct{})
     output := make(chan any)
     listening := make(chan bool)
-    defer close(output)
-    defer close(exit)
-    defer close(listening)
+    defer func() {
+        _, ok := <- exit
+        if ok {
+            close(exit)
+        }
 
-    for _, s := range sessions {
+        _, ok = <- output
+        if ok {
+            close(output)
+        }
+
+        _, ok = <- listening
+        if ok {
+            close(listening)
+        }
+    }()
+
+    for si, s := range sessions {
         go func() {
             s.AuthWithDB(context.Background())
             s.Listen(context.Background(), &output, listening);
 
-            for {
-                select {
-                case v := <- listening:
-                    if !v {
-                        log.Println("Something Goin on")
-                    }
-                    return
-                }
-            }
+            <- listening
+
+            log.Println("Something Goin on")
+            sessions = slices.Delete(sessions, si, si + 1)
         }()
     }
 
     go func() {
         for {
             if cfg.haveNewSessions {
+                log.Println("new session added")
                 exit <- struct{}{}
                 return
             }
@@ -166,7 +176,7 @@ func AppLoop(cfg *AppCfg) bool {
                                 break innerRange
                             }
 
-                            if recentTime == scrobbleTime {
+                            if recentTime.Equal(scrobbleTime) {
                                 continue innerRange
                             }
 
@@ -190,7 +200,7 @@ func AppLoop(cfg *AppCfg) bool {
                     playing := fmt.Sprintf("%s - %s", v.Song.Artist, v.Song.Name)
                     tweet := fmt.Sprintf("Now Playing\n\n%s\nLink: %s\n", playing, yts.Search(playing))
                     log.Println(tweet)
-                    twitter.Tweet(tweet)
+                    // twitter.Tweet(tweet)
                 }
 
             }
@@ -201,6 +211,7 @@ func AppLoop(cfg *AppCfg) bool {
     
     if cfg.haveNewSessions {
         restartLoop = true
+        log.Println("restart loop")
     }
 
     return restartLoop
@@ -263,6 +274,7 @@ func Run(config Config) error {
     }()
 
     for {
+        log.Println("running...")
         restart := AppLoop(cfg)
         if !restart {
             return nil
