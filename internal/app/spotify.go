@@ -166,7 +166,7 @@ func (s *Spotify) Decode(encoded []byte) error {
     var data SpotifyEncoded
     err := json.Unmarshal(encoded, &data)
     if err != nil {
-        return fmt.Errorf("unmarshal fail: ", err)
+        return fmt.Errorf("unmarshal fail: %s\n", err)
     }
 
     s.Username = data.Username
@@ -182,6 +182,7 @@ func (s *Spotify) Listen(ctx context.Context, out *chan any, done chan bool) {
     for {
         select {
         case <- done:
+            close(done)
             return
         case <- timer.C:
             song, err := s.CheckCurrentTrack(ctx)
@@ -189,6 +190,7 @@ func (s *Spotify) Listen(ctx context.Context, out *chan any, done chan bool) {
             if err != nil {
                 log.Printf("Oops: %s\n", err)
                 done <- false
+                return
             }
 
             if out != nil && song != nil {
@@ -356,6 +358,10 @@ func (s *Spotify) CheckCurrentTrack(ctx context.Context) (*SpotifySong, error) {
 
     defer resp.Body.Close()
 
+    if resp.StatusCode == http.StatusNoContent {
+        s.retrying = false;
+    }
+
     if resp.StatusCode == http.StatusOK {
         var data SpotifyPlayingResp
         err = json.NewDecoder(resp.Body).Decode(&data)
@@ -384,7 +390,12 @@ func (s *Spotify) CheckCurrentTrack(ctx context.Context) (*SpotifySong, error) {
         if data.Error.Status == "401" && !s.retrying {
             log.Println("Refreshing Spotify Tokens")
             s.retrying = true
-            s.RefreshSpotifyTokens(ctx)
+            err := s.RefreshSpotifyTokens(ctx)
+
+            if err != nil {
+                log.Println("err", err)
+            }
+
             return s.CheckCurrentTrack(ctx)
         }
     }

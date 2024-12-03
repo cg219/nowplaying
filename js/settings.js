@@ -9,7 +9,6 @@ htmx.onLoad(() => {
                 method: "DELETE"
             })
         }
-        console.log(evt.target.checked)
     })
     htmx.on('input[name="reset-pass"]', "click", async(evt) => {
         const data = new URLSearchParams();
