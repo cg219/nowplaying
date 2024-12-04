@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"time"
@@ -16,7 +15,7 @@ import (
 	"github.com/dghubble/oauth1"
 	"github.com/dghubble/oauth1/twitter"
 	"github.com/pressly/goose/v3"
-	"github.com/tursodatabase/go-libsql"
+	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 
 type Config struct {
@@ -230,7 +229,7 @@ func Run(config Config) error {
         },
     }
 
-    dbName := config.Turso.Name
+    // dbName := config.Turso.Name
     dbUrl := config.Turso.Url
     dbAuthToken := config.Turso.Token
     tmp, err := os.MkdirTemp("", "libdata-*")
@@ -240,15 +239,17 @@ func Run(config Config) error {
     }
 
     defer os.RemoveAll(tmp)
-    dbPath := filepath.Join(tmp, dbName)
-    conn, err := libsql.NewEmbeddedReplicaConnector(dbPath, dbUrl, libsql.WithAuthToken(dbAuthToken))
+    // dbPath := filepath.Join(tmp, dbName)
+    // conn, err := libsql.NewEmbeddedReplicaConnector(dbPath, dbUrl, libsql.WithAuthToken(dbAuthToken))
 
-    if err != nil {
-        return err
-    }
+    // if err != nil {
+        // return err
+    // }
 
-    defer conn.Close()
-    db := sql.OpenDB(conn)
+    // defer conn.Close()
+    // db := sql.OpenDB(conn)
+    conn := fmt.Sprintf("%s?authToken=%s", dbUrl, dbAuthToken)
+    db, _ := sql.Open("libsql", conn)
     defer db.Close()
     provider, err := goose.NewProvider(goose.DialectSQLite3, db, os.DirFS("./sql/migrations"))
 
