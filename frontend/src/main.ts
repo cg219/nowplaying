@@ -1,6 +1,8 @@
+/// <reference types="svelte" />
+/// <reference types="vite/client" />
+
 import { mount } from 'svelte'
-import './app.css'
-import App from './App.svelte'
+import App from './pages/App.svelte'
 import Settings from "./pages/Settings.svelte"
 import Reset from "./pages/Reset.svelte"
 import User from "./pages/User.svelte"

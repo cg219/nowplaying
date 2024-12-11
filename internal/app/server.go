@@ -87,6 +87,7 @@ func addRoutes(srv *Server) {
         w.WriteHeader(http.StatusNotFound)
     })
     srv.mux.Handle("GET /", srv.handle(srv.RedirectAuthenticated("/settings", true), srv.getLoginPage))
+    srv.mux.Handle("GET /assets/", http.FileServer(http.Dir("./frontend/dist")))
     srv.mux.Handle("POST /api/login", srv.handle(srv.LogUserIn))
     srv.mux.Handle("POST /api/logout", srv.handle(srv.UserOnly, srv.LogUserOut))
     srv.mux.Handle("GET /api/last-scrobble", srv.handle(srv.UserOnly, srv.GetLastScrobble))
@@ -117,7 +118,7 @@ func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
         Title: "Login",
         Subtitle: "Sign into platform",
     }
-    tmpl := template.Must(template.ParseFiles("templates/pages/auth.html", "templates/base.layout.html"))
+    tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/auth.html"))
     tmpl.Execute(w, page)
     return nil
 }
@@ -132,7 +133,7 @@ func (s *Server) getUserPage(w http.ResponseWriter, r *http.Request) error {
             { Name: "Settings", Url: "/settings"},
         },
     }
-    tmpl := template.Must(template.ParseFiles("templates/pages/user.html", "templates/base.layout.html"))
+    tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/user.html"))
     tmpl.Execute(w, page)
     return nil
 }
@@ -151,7 +152,7 @@ func (s *Server) getResetPage(w http.ResponseWriter, r *http.Request) error {
         Reset string
     }{ Valid: dbValue.Valid, Username: dbValue.Username, Reset: reset }
 
-    tmpl := template.Must(template.ParseFiles("templates/pages/reset.html", "templates/base.layout.html"))
+    tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/reset.html"))
     tmpl.Execute(w, page)
     return nil
 }
@@ -223,7 +224,7 @@ func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
     scripts := template.Must(template.ParseFiles("js/settings.js"))
     scripts.Execute(buffer, nil)
     page.Javascript = template.JS(buffer.String())
-    tmpl := template.Must(template.ParseFiles("templates/pages/settings.html", "templates/base.layout.html"))
+    tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/settings.html"))
     tmpl.Execute(w, page)
     return nil
 }

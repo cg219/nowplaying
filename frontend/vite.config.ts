@@ -1,19 +1,19 @@
 import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
-import { resolve } from "node:path"
+import { resolve } from "@std/path/resolve"
 
 export default defineConfig({
   plugins: [svelte()],
     build: {
         rollupOptions: {
             input: {
-                auth: resolve(__dirname,  "entrypoints/auth.html"),
-                settings: resolve(__dirname,  "entrypoints/settings.html"),
-                user: resolve(__dirname,  "entrypoints/user.html"),
-                reset: resolve(__dirname,  "entrypoints/reset.html")
+                auth: resolve(import.meta.dirname!,  "entrypoints/auth.html"),
+                settings: resolve(import.meta.dirname!,  "entrypoints/settings.html"),
+                user: resolve(import.meta.dirname!,  "entrypoints/user.html"),
+                reset: resolve(import.meta.dirname!,  "entrypoints/reset.html")
             },
             output: {
-                dir: "build"
+                dir: "dist"
             }
         }
     }

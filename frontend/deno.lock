@@ -1,6 +1,7 @@
 {
   "version": "4",
   "specifiers": {
+    "jsr:@std/path@^1.0.8": "1.0.8",
     "npm:@sveltejs/vite-plugin-svelte@5": "5.0.1_svelte@5.6.2__acorn@8.14.0_vite@6.0.3",
     "npm:@tsconfig/svelte@^5.0.4": "5.0.4",
     "npm:svelte-check@^4.1.0": "4.1.1_svelte@5.6.2__acorn@8.14.0_typescript@5.6.3",
@@ -8,6 +9,11 @@
     "npm:tslib@^2.8.1": "2.8.1",
     "npm:typescript@~5.6.2": "5.6.3",
     "npm:vite@^6.0.1": "6.0.3"
+  },
+  "jsr": {
+    "@std/path@1.0.8": {
+      "integrity": "548fa456bb6a04d3c1a1e7477986b6cffbce95102d0bb447c67c4ee70e0364be"
+    }
   },
   "npm": {
     "@ampproject/remapping@2.3.0": {
@@ -405,6 +411,9 @@
     }
   },
   "workspace": {
+    "dependencies": [
+      "jsr:@std/path@^1.0.8"
+    ],
     "packageJson": {
       "dependencies": [
         "npm:@sveltejs/vite-plugin-svelte@5",
