@@ -1,2 +1,4 @@
 .env
 .envrc
+frontend/build/
+**node_modules
