@@ -189,11 +189,21 @@ func (s *Server) GetUserData(w http.ResponseWriter, r *http.Request) error {
         Timestamp string `json:"timestamp"`
     }
 
+    type Track struct {
+        Name string `json:"name"`
+        Track string `json:"track"`
+        Plays int `json:"plays"`
+    }
+
     type Data struct {
         LastScrobble LastScrobble `json:"lastScrobble"`
         NavLinks []NavLink `json:"links"`
         Title string `json:"title"`
         Subtitle string `json:"subtitle"`
+        Top struct {
+            Tracks []Track `json:"tracks"`
+            Artists []string `json:"artists"`
+        } `json:"top"`
     }
 
     data := Data{}
@@ -208,7 +218,19 @@ func (s *Server) GetUserData(w http.ResponseWriter, r *http.Request) error {
 
     user, _ := s.authCfg.database.GetUser(r.Context(), username.(string))
     scrobble, _ := s.authCfg.database.GetLatestTrack(r.Context(), user.ID)
+    tracks, _ := s.authCfg.database.GetTopTracksOfWeek(r.Context(), 10)
+    artists, _ := s.authCfg.database.GetTopArtistsOfWeek(r.Context(), 10)
     timestamp := time.Unix(0, 0).Add(time.Duration(scrobble.Timestamp) * time.Millisecond)
+
+    data.Top.Tracks = make([]Track, 0)
+
+    for _, row := range tracks {
+        data.Top.Tracks = append(data.Top.Tracks, Track{ Name: row.ArtistName, Plays: int(row.Plays), Track: row.TrackName })
+    } 
+
+    for _, row := range artists {
+        data.Top.Artists = append(data.Top.Artists, row.Artist)
+    } 
 
     data.LastScrobble = LastScrobble{
         ArtistName: scrobble.ArtistName,

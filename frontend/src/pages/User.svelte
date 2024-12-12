@@ -9,6 +9,8 @@
     let title: string = $state("")
     let subtitle: string = $state("")
     let links: Link[] = $state([])
+    let toptracks: Track[] = $state([])
+    let topartists: string[] = $state([])
 
     type LastScrobble = {
         artistName: string
@@ -16,11 +18,21 @@
         timestamp: string
     }
 
+    type Track = {
+        name: string
+        track: string
+        plays: number
+    }
+
     type Props = {
         lastScrobble: LastScrobble
         links: Link[]
         title: string
         subtitle: string
+        top: {
+            tracks: Track[]
+            artists: string[]
+        }
     }
 
     async function getData() {
@@ -41,6 +53,8 @@
                 title = data.title
                 subtitle = data.subtitle
                 links = data.links
+                toptracks = data.top.tracks
+                topartists = data.top.artists
             })
         })
     }
@@ -70,5 +84,27 @@
             <p class="track">{track}</p>
             <p class="date">{timestamp}</p>
         </div>
+
+        <h1>Metrics</h1>
+
+        <hgroup>
+            <h2>Top Tracks</h2>
+            <span>from the last 7 days</span>
+        </hgroup>
+        <ul>
+            {#each toptracks as {name, track, plays}}
+               <li>Plays: {plays} <strong>{name}</strong> - <strong>{track}</strong></li>
+            {/each}
+        </ul>
+
+        <hgroup>
+            <h2>Top Artists</h2>
+            <span>from the last 7 days</span>
+        </hgroup>
+        <ul>
+            {#each topartists as name}
+               <li><strong>{name}</strong></li>
+            {/each}
+        </ul>
     </Layout>
 </div>
