@@ -1,11 +1,6 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
-
-type Link = {
-    url: string
-    name: string
-    current: boolean
-}
+import type { Link } from "./customtypes";
 
 type Props = {
     title: string
@@ -15,6 +10,20 @@ type Props = {
 }
 
 let { title, subtitle, links, children }: Props = $props();
+
+async function logout(evt: Event) {
+    evt.preventDefault()
+
+    const res = await fetch("/auth/logout", {
+        method: "POST",
+        credentials: "same-origin"
+    })
+
+    const data = await res.json()
+
+    if (data.success) location.pathname = "/"
+}
+
 </script>
 
 <main class="container">
@@ -37,7 +46,7 @@ let { title, subtitle, links, children }: Props = $props();
                     {/if} 
                 {/each}
                 <li>
-                    <a href="/api/logout" class="contrast">Logout</a>
+                    <a onclick={logout} href="#logout" class="contrast">Logout</a>
                 </li>
             </ul>
         {/if}

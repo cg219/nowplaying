@@ -1,11 +1,11 @@
 package app
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
-	"html/template"
 	"net/http"
 	_ "net/http/pprof"
 	"strings"
@@ -17,30 +17,33 @@ import (
 
 func (s *Server) ResetPassword(w http.ResponseWriter, r *http.Request) error {
     resettimer := time.Now().Unix()
-    err := r.ParseForm()
-
-    if err != nil {
-        s.log.Error("parsing form", "err", err)
+    type Body struct {
+        Username string `json:"username"`
+        Reset string `json:"reset"`
+        Password string `json:"password"`
+        PasswordConfirm string `json:"passwordConfirm"`
     }
 
-    pass := r.FormValue("password")
-    passconfirm := r.FormValue("password-confirm")
-    reset := r.FormValue("reset")
+    body, err := decode[Body](r)
+    if err != nil {
+        return err
+    }
 
-    if !strings.EqualFold(pass, passconfirm) {
+    if !strings.EqualFold(body.Password, body.PasswordConfirm) {
         return fmt.Errorf(AUTH_ERROR)
     }
 
-    hashPass, _ := s.hasher.EncodeFromString(pass)
+    hashPass, _ := s.hasher.EncodeFromString(body.Password)
 
     s.authCfg.database.ResetPassword(r.Context(), database.ResetPasswordParams{
-        Reset: sql.NullString{ String: reset, Valid: true },
+        Reset: sql.NullString{ String: body.Reset, Valid: true },
         ResetTime: sql.NullInt64{ Int64: resettimer, Valid: true },
         Password: hashPass,
     })
 
-    http.Redirect(w, r, "/", http.StatusSeeOther)
+    data := SuccessResp{ Success: true }
 
+    encode(w, 200, data)
     return nil
 }
 
@@ -159,10 +162,46 @@ func (s *Server) RemoveSpotify(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) GetLastScrobble(w http.ResponseWriter, r *http.Request) error {
-    type Page struct {
-        ArtistName string
-        TrackName string
-        Timestamp string
+    type Data struct {
+        ArtistName string `json:"artistName"`
+        TrackName string `json:"trackName"`
+        Timestamp string `json:"timestamp"`
+    }
+
+    username := r.Context().Value("username")
+    user, _ := s.authCfg.database.GetUser(r.Context(), username.(string))
+    scrobble, _ := s.authCfg.database.GetLatestTrack(r.Context(), user.ID)
+    timestamp := time.Unix(0, 0).Add(time.Duration(scrobble.Timestamp) * time.Millisecond)
+    data := Data{
+        ArtistName: scrobble.ArtistName,
+        TrackName: scrobble.TrackName,
+        Timestamp: timestamp.Format("01/02/2006 - 03:04PM"),
+    }
+
+    encode(w, 200, data)
+    return nil
+}
+
+func (s *Server) GetUserData(w http.ResponseWriter, r *http.Request) error {
+    type LastScrobble struct {
+        ArtistName string `json:"artistName"`
+        TrackName string `json:"trackName"`
+        Timestamp string `json:"timestamp"`
+    }
+
+    type Data struct {
+        LastScrobble LastScrobble `json:"lastScrobble"`
+        NavLinks []NavLink `json:"links"`
+        Title string `json:"title"`
+        Subtitle string `json:"subtitle"`
+    }
+
+    data := Data{}
+    data.Title = "My Page"
+    data.Subtitle = "See my activity"
+    data.NavLinks = []NavLink{
+        { Name: "My Page", Current: true, Url: "/me"},
+        { Name: "Settings", Url: "/settings"},
     }
 
     username := r.Context().Value("username")
@@ -170,14 +209,83 @@ func (s *Server) GetLastScrobble(w http.ResponseWriter, r *http.Request) error {
     user, _ := s.authCfg.database.GetUser(r.Context(), username.(string))
     scrobble, _ := s.authCfg.database.GetLatestTrack(r.Context(), user.ID)
     timestamp := time.Unix(0, 0).Add(time.Duration(scrobble.Timestamp) * time.Millisecond)
-    page := &Page{
+
+    data.LastScrobble = LastScrobble{
         ArtistName: scrobble.ArtistName,
         TrackName: scrobble.TrackName,
         Timestamp: timestamp.Format("01/02/2006 - 03:04PM"),
     }
 
-    tmpl := template.Must(template.ParseFiles("templates/fragments/last-scrobble.html"))
-    tmpl.Execute(w, page)
+    encode(w, 200, data)
+    return nil
+}
+
+
+func (s *Server) GetSettingsData(w http.ResponseWriter, r *http.Request) error {
+    user, err := s.authCfg.database.GetUser(r.Context(), r.Context().Value("username").(string))
+    if err != nil && err != sql.ErrNoRows {
+        return err
+    }
+
+    sessions, err := s.authCfg.database.GetUserMusicSessions(r.Context(), user.ID)
+    if err != nil && err != sql.ErrNoRows {
+        return err
+    }
+
+    spotify, err := s.authCfg.database.GetSpotifySession(r.Context(), r.Context().Value("username").(string))
+    if err != nil && err != sql.ErrNoRows {
+        return err
+    }
+
+    twitter, err := s.authCfg.database.GetTwitterSession(r.Context(), r.Context().Value("username").(string))
+    if err != nil && err != sql.ErrNoRows {
+        return err
+    }
+
+    type Data struct {
+        SpotifyTrack string `json:"spotifyTrack"`
+        SpotifyAuthURL string `json:"spotifyUrl"`
+        SpotifyOn bool `json:"spotifyOn"`
+        TwitterOn bool `json:"twitterOn"`
+        TwitterAuthURL string `json:"twitterUrl"`
+        NavLinks []NavLink `json:"links"`
+        Title string `json:"title"`
+        Subtitle string `json:"subtitle"`
+    }
+
+    data := Data{}
+    data.Title = "Settings"
+    data.Subtitle = "Configure your preferences"
+    data.NavLinks = []NavLink{
+        { Name: "My Page", Url: "/me"},
+        { Name: "Settings", Current: true, Url: "/settings"},
+    }
+
+    if spotify.SpotifyAccessToken.Valid && spotify.SpotifyRefreshToken.Valid {
+        data.SpotifyOn = true
+    } else {
+        data.SpotifyAuthURL = GetSpotifyAuthURL(r.Context(), user.Username, SpotifyConfig{
+            Id: s.authCfg.config.Spotify.Id,
+            Redirect: s.authCfg.config.Spotify.Redirect,
+            Secret: s.authCfg.config.Spotify.Secret,
+        }, s.authCfg.database)
+    }
+
+    for _, v := range sessions {
+        if strings.EqualFold(v.Type, "spotify") {
+            if v.Active == 1 {
+                data.SpotifyTrack = "checked"
+            }
+        }
+    }
+
+    if twitter.TwitterOauthToken.Valid && twitter.TwitterOauthSecret.Valid {
+        data.TwitterOn = true
+    } else {
+        data.TwitterAuthURL = GetAuthURL(context.Background(), s.authCfg.TwitterOAuth, s.authCfg.database, user.Username)
+    }
+
+    encode(w, 200, data)
     return nil
 }
 
@@ -201,6 +309,26 @@ func (s *Server) LogUserOut(w http.ResponseWriter, r *http.Request) error {
     s.unsetTokens(w, r)
     http.Redirect(w, r, "/", http.StatusSeeOther)
     s.log.Info("Logout from FE")
+    return nil
+}
+
+func (s *Server) GetResetPasswordData(w http.ResponseWriter, r *http.Request) error {
+    type Data struct {
+        Valid bool `json:"valid"`
+        Username string `json:"username"`
+        Reset string `json:"reset"`
+    }
+
+    reset := r.PathValue("resetvalue")
+
+    dbValue, _ := s.authCfg.database.CanResetPassword(r.Context(), database.CanResetPasswordParams{
+        ResetTime: sql.NullInt64{ Int64: time.Now().Unix(), Valid: true },
+        Reset: sql.NullString{ String: reset, Valid: true },
+    })
+
+    data := Data{ Valid: dbValue.Valid, Username: dbValue.Username, Reset: reset }
+
+    encode(w, 200, data)
     return nil
 }
 

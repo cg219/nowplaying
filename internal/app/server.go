@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
@@ -45,9 +44,9 @@ type ResponseError struct {
 }
 
 type NavLink struct {
-    Current bool
-    Name string
-    Url string
+    Current bool `json:"current"`
+    Name string `json:"name"`
+    Url string `json:"url"`
 }
 
 type Page struct {
@@ -86,11 +85,13 @@ func addRoutes(srv *Server) {
     srv.mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
         w.WriteHeader(http.StatusNotFound)
     })
-    srv.mux.Handle("GET /", srv.handle(srv.RedirectAuthenticated("/settings", true), srv.getLoginPage))
+    srv.mux.Handle("GET /", srv.handle(srv.RedirectAuthenticated("/me", true), srv.getLoginPage))
     srv.mux.Handle("GET /assets/", http.FileServer(http.Dir("./frontend/dist")))
     srv.mux.Handle("POST /api/login", srv.handle(srv.LogUserIn))
     srv.mux.Handle("POST /api/logout", srv.handle(srv.UserOnly, srv.LogUserOut))
+    srv.mux.Handle("POST /api/settings", srv.handle(srv.UserOnly, srv.GetSettingsData))
     srv.mux.Handle("GET /api/last-scrobble", srv.handle(srv.UserOnly, srv.GetLastScrobble))
+    srv.mux.Handle("POST /api/me", srv.handle(srv.UserOnly, srv.GetUserData))
     srv.mux.Handle("POST /api/forgot-password", srv.handle(srv.ForgotPassword))
     srv.mux.Handle("POST /api/reset-password", srv.handle(srv.ResetPassword))
     srv.mux.Handle("POST /api/spotify", srv.handle(srv.UserOnly, srv.AddSpotify))
@@ -104,6 +105,7 @@ func addRoutes(srv *Server) {
     srv.mux.Handle("GET /me", srv.handle(srv.RedirectAuthenticated("/", false), srv.getUserPage))
     srv.mux.Handle("GET /settings", srv.handle(srv.RedirectAuthenticated("/", false), srv.getSettingsPage))
     srv.mux.Handle("GET /reset/{resetvalue}", srv.handle(srv.getResetPage))
+    srv.mux.Handle("POST /reset/{resetvalue}", srv.handle(srv.GetResetPasswordData))
 }
 
 func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -113,119 +115,119 @@ func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
-    page := Page{
-        SiteTitle: "Now Playing",
-        Title: "Login",
-        Subtitle: "Sign into platform",
-    }
+    // page := Page{
+    //     SiteTitle: "Now Playing",
+    //     Title: "Login",
+    //     Subtitle: "Sign into platform",
+    // }
     tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/auth.html"))
-    tmpl.Execute(w, page)
+    tmpl.Execute(w, nil)
     return nil
 }
 
 func (s *Server) getUserPage(w http.ResponseWriter, r *http.Request) error {
-    page := Page{
-        SiteTitle: "Now Playing - My Page",
-        Title: "My Page",
-        Subtitle: "See my activity",
-        NavLinks: []NavLink{
-            { Name: "My Page", Current: true, Url: "/me"},
-            { Name: "Settings", Url: "/settings"},
-        },
-    }
+    // page := Page{
+    //     SiteTitle: "Now Playing - My Page",
+    //     Title: "My Page",
+    //     Subtitle: "See my activity",
+    //     NavLinks: []NavLink{
+    //         { Name: "My Page", Current: true, Url: "/me"},
+    //         { Name: "Settings", Url: "/settings"},
+    //     },
+    // }
     tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/user.html"))
-    tmpl.Execute(w, page)
+    tmpl.Execute(w, nil)
     return nil
 }
 
 func (s *Server) getResetPage(w http.ResponseWriter, r *http.Request) error {
-    reset := r.PathValue("resetvalue")
+    // reset := r.PathValue("resetvalue")
 
-    dbValue, _ := s.authCfg.database.CanResetPassword(r.Context(), database.CanResetPasswordParams{
-        ResetTime: sql.NullInt64{ Int64: time.Now().Unix(), Valid: true },
-        Reset: sql.NullString{ String: reset, Valid: true },
-    })
+    // dbValue, _ := s.authCfg.database.CanResetPassword(r.Context(), database.CanResetPasswordParams{
+    //     ResetTime: sql.NullInt64{ Int64: time.Now().Unix(), Valid: true },
+    //     Reset: sql.NullString{ String: reset, Valid: true },
+    // })
 
-    page := &struct{
-        Valid bool
-        Username string
-        Reset string
-    }{ Valid: dbValue.Valid, Username: dbValue.Username, Reset: reset }
+    // page := &struct{
+    //     Valid bool
+    //     Username string
+    //     Reset string
+    // }{ Valid: dbValue.Valid, Username: dbValue.Username, Reset: reset }
 
     tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/reset.html"))
-    tmpl.Execute(w, page)
+    tmpl.Execute(w, nil)
     return nil
 }
 
 func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
-    user, err := s.authCfg.database.GetUser(r.Context(), r.Context().Value("username").(string))
-    if err != nil && err != sql.ErrNoRows {
-        return err
-    }
-
-    sessions, err := s.authCfg.database.GetUserMusicSessions(r.Context(), user.ID)
-    if err != nil && err != sql.ErrNoRows {
-        return err
-    }
-
-    spotify, err := s.authCfg.database.GetSpotifySession(r.Context(), r.Context().Value("username").(string))
-    if err != nil && err != sql.ErrNoRows {
-        return err
-    }
-
-    twitter, err := s.authCfg.database.GetTwitterSession(r.Context(), r.Context().Value("username").(string))
-    if err != nil && err != sql.ErrNoRows {
-        return err
-    }
-
-    page := &struct{
-        SpotifyTrack string
-        SpotifyAuthURL string
-        SpotifyOn bool
-        TwitterOn bool
-        TwitterAuthURL string
-        Javascript template.JS
-        Page
-    }{}
-
-    page.SiteTitle = "Now Playing - Settings"
-    page.Title = "Settings"
-    page.Subtitle = "Configure your preferences"
-    page.NavLinks = []NavLink{
-        { Name: "My Page", Url: "/me"},
-        { Name: "Settings", Current: true, Url: "/settings"},
-    }
-
-    if spotify.SpotifyAccessToken.Valid && spotify.SpotifyRefreshToken.Valid {
-        page.SpotifyOn = true
-    } else {
-        page.SpotifyAuthURL = GetSpotifyAuthURL(r.Context(), user.Username, SpotifyConfig{
-            Id: s.authCfg.config.Spotify.Id,
-            Redirect: s.authCfg.config.Spotify.Redirect,
-            Secret: s.authCfg.config.Spotify.Secret,
-        }, s.authCfg.database)
-    }
-
-    for _, v := range sessions {
-        if strings.EqualFold(v.Type, "spotify") {
-            if v.Active == 1 {
-                page.SpotifyTrack = "checked"
-            }
-        }
-    }
-
-    if twitter.TwitterOauthToken.Valid && twitter.TwitterOauthSecret.Valid {
-        page.TwitterOn = true
-    } else {
-        page.TwitterAuthURL = GetAuthURL(context.Background(), s.authCfg.TwitterOAuth, s.authCfg.database, user.Username)
-    }
-
-    buffer := new(bytes.Buffer)
-    scripts := template.Must(template.ParseFiles("js/settings.js"))
-    scripts.Execute(buffer, nil)
-    page.Javascript = template.JS(buffer.String())
+    // user, err := s.authCfg.database.GetUser(r.Context(), r.Context().Value("username").(string))
+    // if err != nil && err != sql.ErrNoRows {
+    //     return err
+    // }
+    //
+    // sessions, err := s.authCfg.database.GetUserMusicSessions(r.Context(), user.ID)
+    // if err != nil && err != sql.ErrNoRows {
+    //     return err
+    // }
+    //
+    // spotify, err := s.authCfg.database.GetSpotifySession(r.Context(), r.Context().Value("username").(string))
+    // if err != nil && err != sql.ErrNoRows {
+    //     return err
+    // }
+    //
+    // twitter, err := s.authCfg.database.GetTwitterSession(r.Context(), r.Context().Value("username").(string))
+    // if err != nil && err != sql.ErrNoRows {
+    //     return err
+    // }
+    //
+    // page := &struct{
+    //     SpotifyTrack string
+    //     SpotifyAuthURL string
+    //     SpotifyOn bool
+    //     TwitterOn bool
+    //     TwitterAuthURL string
+    //     Javascript template.JS
+    //     Page
+    // }{}
+    //
+    // page.SiteTitle = "Now Playing - Settings"
+    // page.Title = "Settings"
+    // page.Subtitle = "Configure your preferences"
+    // page.NavLinks = []NavLink{
+    //     { Name: "My Page", Url: "/me"},
+    //     { Name: "Settings", Current: true, Url: "/settings"},
+    // }
+    //
+    // if spotify.SpotifyAccessToken.Valid && spotify.SpotifyRefreshToken.Valid {
+    //     page.SpotifyOn = true
+    // } else {
+    //     page.SpotifyAuthURL = GetSpotifyAuthURL(r.Context(), user.Username, SpotifyConfig{
+    //         Id: s.authCfg.config.Spotify.Id,
+    //         Redirect: s.authCfg.config.Spotify.Redirect,
+    //         Secret: s.authCfg.config.Spotify.Secret,
+    //     }, s.authCfg.database)
+    // }
+    //
+    // for _, v := range sessions {
+    //     if strings.EqualFold(v.Type, "spotify") {
+    //         if v.Active == 1 {
+    //             page.SpotifyTrack = "checked"
+    //         }
+    //     }
+    // }
+    //
+    // if twitter.TwitterOauthToken.Valid && twitter.TwitterOauthSecret.Valid {
+    //     page.TwitterOn = true
+    // } else {
+    //     page.TwitterAuthURL = GetAuthURL(context.Background(), s.authCfg.TwitterOAuth, s.authCfg.database, user.Username)
+    // }
+    //
+    // buffer := new(bytes.Buffer)
+    // scripts := template.Must(template.ParseFiles("js/settings.js"))
+    // scripts.Execute(buffer, nil)
+    // page.Javascript = template.JS(buffer.String())
     tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/settings.html"))
-    tmpl.Execute(w, page)
+    tmpl.Execute(w, nil)
     return nil
 }
 
