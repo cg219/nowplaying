@@ -1,2 +1,5 @@
 .env
 .envrc
+**build
+**dist
+**node_modules

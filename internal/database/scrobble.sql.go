@@ -80,6 +80,243 @@ func (q *Queries) GetRecentScrobbles(ctx context.Context, uid int64) ([]GetRecen
 	return items, nil
 }
 
+const getTopArtistsOfMonth = `-- name: GetTopArtistsOfMonth :many
+With splits as (
+  SELECT trim(value) as artist
+  FROM scrobbles, json_each('["' || replace(artist_name, ',', '","') || '"]')
+  WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*30))
+)
+SELECT artist, count(*) as plays
+FROM splits
+group by artist
+order by plays DESC
+limit ?
+`
+
+type GetTopArtistsOfMonthRow struct {
+	Artist string
+	Plays  int64
+}
+
+func (q *Queries) GetTopArtistsOfMonth(ctx context.Context, limit int64) ([]GetTopArtistsOfMonthRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTopArtistsOfMonth, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTopArtistsOfMonthRow
+	for rows.Next() {
+		var i GetTopArtistsOfMonthRow
+		if err := rows.Scan(&i.Artist, &i.Plays); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTopArtistsOfWeek = `-- name: GetTopArtistsOfWeek :many
+With splits as (
+  SELECT trim(value) as artist
+  FROM scrobbles, json_each('["' || replace(artist_name, ',', '","') || '"]')
+  WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*7))
+)
+SELECT artist, count(*) as plays
+FROM splits
+group by artist
+order by plays DESC
+limit ?
+`
+
+type GetTopArtistsOfWeekRow struct {
+	Artist string
+	Plays  int64
+}
+
+func (q *Queries) GetTopArtistsOfWeek(ctx context.Context, limit int64) ([]GetTopArtistsOfWeekRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTopArtistsOfWeek, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTopArtistsOfWeekRow
+	for rows.Next() {
+		var i GetTopArtistsOfWeekRow
+		if err := rows.Scan(&i.Artist, &i.Plays); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTopArtistsOfYear = `-- name: GetTopArtistsOfYear :many
+With splits as (
+  SELECT trim(value) as artist
+  FROM scrobbles, json_each('["' || replace(artist_name, ',', '","') || '"]')
+  WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*365))
+)
+SELECT artist, count(*) as plays
+FROM splits
+group by artist
+order by plays DESC
+limit ?
+`
+
+type GetTopArtistsOfYearRow struct {
+	Artist string
+	Plays  int64
+}
+
+func (q *Queries) GetTopArtistsOfYear(ctx context.Context, limit int64) ([]GetTopArtistsOfYearRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTopArtistsOfYear, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTopArtistsOfYearRow
+	for rows.Next() {
+		var i GetTopArtistsOfYearRow
+		if err := rows.Scan(&i.Artist, &i.Plays); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTopTracksOfMonth = `-- name: GetTopTracksOfMonth :many
+SELECT track_name, artist_name, count(id) as plays
+FROM scrobbles
+WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*30))
+GROUP BY track_name
+ORDER BY plays DESC
+LIMIT ?
+`
+
+type GetTopTracksOfMonthRow struct {
+	TrackName  string
+	ArtistName string
+	Plays      int64
+}
+
+func (q *Queries) GetTopTracksOfMonth(ctx context.Context, limit int64) ([]GetTopTracksOfMonthRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTopTracksOfMonth, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTopTracksOfMonthRow
+	for rows.Next() {
+		var i GetTopTracksOfMonthRow
+		if err := rows.Scan(&i.TrackName, &i.ArtistName, &i.Plays); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTopTracksOfWeek = `-- name: GetTopTracksOfWeek :many
+SELECT track_name, artist_name, count(id) as plays
+FROM scrobbles
+WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*7))
+GROUP BY track_name
+ORDER BY plays DESC
+LIMIT ?
+`
+
+type GetTopTracksOfWeekRow struct {
+	TrackName  string
+	ArtistName string
+	Plays      int64
+}
+
+func (q *Queries) GetTopTracksOfWeek(ctx context.Context, limit int64) ([]GetTopTracksOfWeekRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTopTracksOfWeek, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTopTracksOfWeekRow
+	for rows.Next() {
+		var i GetTopTracksOfWeekRow
+		if err := rows.Scan(&i.TrackName, &i.ArtistName, &i.Plays); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTopTracksOfYear = `-- name: GetTopTracksOfYear :many
+SELECT track_name, artist_name, count(id) as plays
+FROM scrobbles
+WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*365))
+GROUP BY track_name
+ORDER BY plays DESC
+LIMIT ?
+`
+
+type GetTopTracksOfYearRow struct {
+	TrackName  string
+	ArtistName string
+	Plays      int64
+}
+
+func (q *Queries) GetTopTracksOfYear(ctx context.Context, limit int64) ([]GetTopTracksOfYearRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTopTracksOfYear, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTopTracksOfYearRow
+	for rows.Next() {
+		var i GetTopTracksOfYearRow
+		if err := rows.Scan(&i.TrackName, &i.ArtistName, &i.Plays); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeScrobble = `-- name: RemoveScrobble :exec
 DELETE FROM scrobbles
 WHERE id = ?
