@@ -8,6 +8,14 @@ import (
 	"database/sql"
 )
 
+type HistorySpotify struct {
+	ID         int64
+	ArtistName string
+	TrackName  string
+	AlbumName  sql.NullString
+	Timestamp  int64
+}
+
 type MusicSession struct {
 	ID     int64
 	Data   string
