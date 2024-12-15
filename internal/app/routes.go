@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"strings"
@@ -70,20 +71,90 @@ func (s *Server) ForgotPassword(w http.ResponseWriter, r *http.Request) error {
         s.log.Error("resetting pass", "err", err)
     }
 
+    // TODO: Setup email service to send this to user email
     s.log.Info("Reset Link:", "url", fmt.Sprintf("http://localhost:%s/reset/%s", "3006", reset))
 
+    return nil
+}
+
+func (s *Server) ShareTopArtists(w http.ResponseWriter, r *http.Request) error {
+    username := r.Context().Value("username").(string)
+    twitter := NewTwitter(username, TwitterConfig(s.authCfg.config.Twitter), s.authCfg.database)
+    err := twitter.AuthWithDB(context.Background())
+    if err != nil {
+        s.log.Error("Twitter Auth", "err", err)
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    results, _ := s.authCfg.database.GetTopArtistsOfWeek(r.Context(), 7)
+
+    var tweet strings.Builder
+
+    tweet.WriteString("Top artists this week:\n\n")
+    for _, artist := range results {
+        tweet.WriteString(fmt.Sprintf("%s(%d)\n", artist.Artist, artist.Plays))
+    }
+
+    log.Println(tweet.String(), len(tweet.String()))
+    twitter.Tweet(tweet.String())
+    return nil
+}
+
+func (s *Server) ShareTopTracks(w http.ResponseWriter, r *http.Request) error {
+    username := r.Context().Value("username").(string)
+    twitter := NewTwitter(username, TwitterConfig(s.authCfg.config.Twitter), s.authCfg.database)
+    err := twitter.AuthWithDB(context.Background())
+    if err != nil {
+        s.log.Error("Twitter Auth", "err", err)
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    results, _ := s.authCfg.database.GetTopTracksOfWeek(r.Context(), 5)
+
+    var tweet strings.Builder
+
+    tweet.WriteString("Top songs this week:\n\n")
+    for _, scrobble := range results {
+        tweet.WriteString(fmt.Sprintf("%s - %s(%d)\n", scrobble.ArtistName, scrobble.TrackName, scrobble.Plays))
+    }
+
+    log.Println(tweet.String(), len(tweet.String()))
+    twitter.Tweet(tweet.String())
+    return nil
+}
+
+func (s *Server) ShareLatestTrack(w http.ResponseWriter, r *http.Request) error {
+    username := r.Context().Value("username").(string)
+    user, err := s.authCfg.database.GetUser(r.Context(), username)
+    if err != nil && err != sql.ErrNoRows {
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    scrobble, _ := s.authCfg.database.GetLatestTrack(r.Context(), user.ID)
+    twitter := NewTwitter(username, TwitterConfig(s.authCfg.config.Twitter), s.authCfg.database)
+    err = twitter.AuthWithDB(context.Background())
+    if err != nil {
+        s.log.Error("Twitter Auth", "err", err)
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    yts := NewYoutube(r.Context())
+    playing := fmt.Sprintf("%s - %s", scrobble.ArtistName, scrobble.TrackName)
+    tweet := fmt.Sprintf("Now Playing\n\n%s\nLink: %s\n", playing, yts.Search(playing))
+    log.Println(tweet)
+    // twitter.Tweet(tweet)
     return nil
 }
 
 func (s *Server) AddSpotify(w http.ResponseWriter, r *http.Request) error {
     user, err := s.authCfg.database.GetUser(r.Context(), r.Context().Value("username").(string))
     if err != nil && err != sql.ErrNoRows {
-       return err
+        return fmt.Errorf(INTERNAL_ERROR)
     }
 
     sessions, err := s.authCfg.database.GetUserMusicSessions(r.Context(), user.ID)
     if err != nil && err != sql.ErrNoRows {
-       return err
+        return fmt.Errorf(INTERNAL_ERROR)
     }
 
     for _, v := range sessions {
@@ -124,12 +195,12 @@ func (s *Server) AddSpotify(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) RemoveSpotify(w http.ResponseWriter, r *http.Request) error {
     user, err := s.authCfg.database.GetUser(r.Context(), r.Context().Value("username").(string))
     if err != nil && err != sql.ErrNoRows {
-       return err
+        return fmt.Errorf(INTERNAL_ERROR)
     }
 
     sessions, err := s.authCfg.database.GetUserMusicSessions(r.Context(), user.ID)
     if err != nil && err != sql.ErrNoRows {
-       return err
+        return fmt.Errorf(INTERNAL_ERROR)
     }
 
     var idToRemove int64

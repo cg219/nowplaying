@@ -100,7 +100,6 @@ func AppLoop(cfg *AppCfg) bool {
         }
     }
 
-    yts := NewYoutube(context.Background())
     exit := make(chan struct{})
     output := make(chan any)
     listening := make(chan bool)
@@ -144,7 +143,6 @@ func AppLoop(cfg *AppCfg) bool {
     }()
 
     go func() {
-        outerRange :
         for v := range output {
             switch v := v.(type) {
             case SpotifyListenValue:
@@ -162,44 +160,7 @@ func AppLoop(cfg *AppCfg) bool {
                     Uid: int(user.ID),
                     Progress: v.Song.Progress,
                 }); ok {
-                    scrobbles, _ := cfg.database.GetRecentScrobbles(context.Background(), user.ID)
-                    scrobbleTime := time.Unix(int64(v.Song.Timestamp) / 1000, 0)
-                    dontTweet := false
-
-                    innerRange :
-                    for _, recent := range scrobbles {
-                        recentTime := time.Unix(recent.Timestamp / 1000, 0)
-
-                        if recent.ArtistName == v.Song.Artist && recent.TrackName == v.Song.Name {
-                            if recentTime.Add(time.Hour * 2).Before(scrobbleTime) {
-                                break innerRange
-                            }
-
-                            if recentTime.Equal(scrobbleTime) {
-                                continue innerRange
-                            }
-
-                            dontTweet = true
-                            break innerRange
-                        }
-                    }
-
-                    if dontTweet {
-                        continue outerRange
-                    }
-
-                    twitter := NewTwitter(v.Username, TwitterConfig(cfg.config.Twitter), cfg.database)
-
-                    err := twitter.AuthWithDB(context.Background())
-                    if err != nil {
-                        log.Printf("Oops: %s", err)
-                        continue
-                    }
-
-                    playing := fmt.Sprintf("%s - %s", v.Song.Artist, v.Song.Name)
-                    tweet := fmt.Sprintf("Now Playing\n\n%s\nLink: %s\n", playing, yts.Search(playing))
-                    log.Println(tweet)
-                    // twitter.Tweet(tweet)
+                    log.Printf("SCROBBLED: %s - %s\n", v.Song.Artist, v.Song.Name)
                 }
 
             }

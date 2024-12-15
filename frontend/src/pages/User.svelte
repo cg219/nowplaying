@@ -44,6 +44,33 @@
         return await res.json() as Props
     }
 
+    async function shareLatestTrack() {
+        const res = await fetch("/api/share-latest-track", {
+            method: "POST",
+            credentials: "same-origin"
+        })
+
+        await res.json()
+    }
+
+    async function shareTopArtists() {
+        const res = await fetch("/api/share-top-artists", {
+            method: "POST",
+            credentials: "same-origin"
+        })
+
+        await res.json()
+    }
+
+    async function shareTopTracks() {
+        const res = await fetch("/api/share-top-tracks", {
+            method: "POST",
+            credentials: "same-origin"
+        })
+
+        await res.json()
+    }
+
     const init: Action = () => {
         $effect(() => {
             getData().then((data) => {
@@ -84,6 +111,9 @@
             <p class="track">{track}</p>
             <p class="date">{timestamp}</p>
         </div>
+        <p>
+            <button onclick={shareLatestTrack}>Share Latest on Twitter</button>
+        </p>
 
         <h1>Metrics</h1>
 
@@ -96,6 +126,9 @@
                <li>Plays: {plays} <strong>{name}</strong> - <strong>{track}</strong></li>
             {/each}
         </ul>
+        <p>
+            <button onclick={shareTopTracks}>Share Top Tracks on Twitter</button>
+        </p>
 
         <hgroup>
             <h2>Top Artists</h2>
@@ -106,5 +139,9 @@
                <li><strong>{name}</strong></li>
             {/each}
         </ul>
+        <p>
+            <button onclick={shareTopArtists}>Share Top Artists on Twitter</button>
+        </p>
+
     </Layout>
 </div>
