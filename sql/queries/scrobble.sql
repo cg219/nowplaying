@@ -13,6 +13,38 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 DELETE FROM scrobbles
 WHERE id = ?;
 
+-- name: GetTopAlbumsOfYear :many
+SELECT album_name, artist_name, count(id) as plays
+FROM scrobbles
+WHERE uid = ? AND album_name IS NOT "Unknown" AND album_name IS NOT NULL AND album_name IS NOT "" AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*365))
+GROUP BY album_name
+ORDER BY plays DESC
+LIMIT ?;
+
+-- name: GetTopAlbumsOfMonth :many
+SELECT album_name, artist_name, count(id) as plays
+FROM scrobbles
+WHERE uid = ? AND album_name IS NOT "Unknown" AND album_name IS NOT NULL AND album_name IS NOT "" AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*30))
+GROUP BY album_name
+ORDER BY plays DESC
+LIMIT ?;
+
+-- name: GetTopAlbumsOfWeek :many
+SELECT album_name, artist_name, count(id) as plays
+FROM scrobbles
+WHERE uid = ? AND album_name IS NOT "Unknown" AND album_name IS NOT NULL AND album_name IS NOT "" AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*7))
+GROUP BY album_name
+ORDER BY plays DESC
+LIMIT ?;
+
+-- name: GetTopAlbumsOfDay :many
+SELECT album_name, artist_name, count(id) as plays
+FROM scrobbles
+WHERE uid = ? AND album_name IS NOT "Unknown" AND album_name IS NOT NULL AND album_name IS NOT "" AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*1))
+GROUP BY album_name
+ORDER BY plays DESC
+LIMIT ?;
+
 -- name: GetRecentScrobbles :many
 SELECT artist_name, track_name, timestamp, duration
 FROM scrobbles
@@ -23,7 +55,7 @@ LIMIT 5;
 -- name: GetTopTracksOfYear :many
 SELECT track_name, artist_name, count(id) as plays
 FROM scrobbles
-WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*365))
+WHERE uid = ? AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*365))
 GROUP BY track_name
 ORDER BY plays DESC
 LIMIT ?;
@@ -31,7 +63,7 @@ LIMIT ?;
 -- name: GetTopTracksOfMonth :many
 SELECT track_name, artist_name, count(id) as plays
 FROM scrobbles
-WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*30))
+WHERE uid = ? AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*30))
 GROUP BY track_name
 ORDER BY plays DESC
 LIMIT ?;
@@ -39,7 +71,15 @@ LIMIT ?;
 -- name: GetTopTracksOfWeek :many
 SELECT track_name, artist_name, count(id) as plays
 FROM scrobbles
-WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*7))
+WHERE uid = ? AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*7))
+GROUP BY track_name
+ORDER BY plays DESC
+LIMIT ?;
+
+-- name: GetTopTracksOfDay :many
+SELECT track_name, artist_name, count(id) as plays
+FROM scrobbles
+WHERE uid = ? AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*1))
 GROUP BY track_name
 ORDER BY plays DESC
 LIMIT ?;
@@ -48,7 +88,7 @@ LIMIT ?;
 With splits as (
   SELECT trim(value) as artist
   FROM scrobbles, json_each('["' || replace(artist_name, ',', '","') || '"]')
-  WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*365))
+  WHERE uid = ? AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*365))
 )
 SELECT artist, count(*) as plays
 FROM splits
@@ -60,7 +100,7 @@ limit ?;
 With splits as (
   SELECT trim(value) as artist
   FROM scrobbles, json_each('["' || replace(artist_name, ',', '","') || '"]')
-  WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*30))
+  WHERE uid = ? AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*30))
 )
 SELECT artist, count(*) as plays
 FROM splits
@@ -72,7 +112,19 @@ limit ?;
 With splits as (
   SELECT trim(value) as artist
   FROM scrobbles, json_each('["' || replace(artist_name, ',', '","') || '"]')
-  WHERE uid = 1 AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*7))
+  WHERE uid = ? AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*7))
+)
+SELECT artist, count(*) as plays
+FROM splits
+group by artist
+order by plays DESC
+limit ?;
+
+-- name: GetTopArtistsOfDay :many
+With splits as (
+  SELECT trim(value) as artist
+  FROM scrobbles, json_each('["' || replace(artist_name, ',', '","') || '"]')
+  WHERE uid = ? AND (timestamp / 1000) >= (strftime("%s", "now") - (60*60*24*1))
 )
 SELECT artist, count(*) as plays
 FROM splits

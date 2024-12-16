@@ -77,16 +77,86 @@ func (s *Server) ForgotPassword(w http.ResponseWriter, r *http.Request) error {
     return nil
 }
 
-func (s *Server) ShareTopArtists(w http.ResponseWriter, r *http.Request) error {
+func (s *Server) ShareTopDailyArtists(w http.ResponseWriter, r *http.Request) error {
     username := r.Context().Value("username").(string)
+    user, err := s.authCfg.database.GetUser(r.Context(), username)
+    if err != nil && err != sql.ErrNoRows {
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
     twitter := NewTwitter(username, TwitterConfig(s.authCfg.config.Twitter), s.authCfg.database)
-    err := twitter.AuthWithDB(context.Background())
+    err = twitter.AuthWithDB(context.Background())
     if err != nil {
         s.log.Error("Twitter Auth", "err", err)
         return fmt.Errorf(INTERNAL_ERROR)
     }
 
-    results, _ := s.authCfg.database.GetTopArtistsOfWeek(r.Context(), 7)
+    results, _ := s.authCfg.database.GetTopArtistsOfDay(r.Context(), database.GetTopArtistsOfDayParams{
+        Limit: 7,
+        Uid: user.ID,
+    })
+
+    var tweet strings.Builder
+
+    tweet.WriteString("Top artists the last 24 hours:\n\n")
+    for _, artist := range results {
+        tweet.WriteString(fmt.Sprintf("%s(%d)\n", artist.Artist, artist.Plays))
+    }
+
+    log.Println(tweet.String(), len(tweet.String()))
+    twitter.Tweet(tweet.String())
+    return nil
+}
+
+func (s *Server) ShareTopDailyTracks(w http.ResponseWriter, r *http.Request) error {
+    username := r.Context().Value("username").(string)
+    user, err := s.authCfg.database.GetUser(r.Context(), username)
+    if err != nil && err != sql.ErrNoRows {
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    twitter := NewTwitter(username, TwitterConfig(s.authCfg.config.Twitter), s.authCfg.database)
+    err = twitter.AuthWithDB(context.Background())
+    if err != nil {
+        s.log.Error("Twitter Auth", "err", err)
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    results, _ := s.authCfg.database.GetTopTracksOfDay(r.Context(), database.GetTopTracksOfDayParams{
+        Limit: 5,
+        Uid: user.ID,
+    })
+
+    var tweet strings.Builder
+
+    tweet.WriteString("Top songs the last 24 hours:\n\n")
+    for _, scrobble := range results {
+        tweet.WriteString(fmt.Sprintf("%s - %s(%d)\n", scrobble.ArtistName, scrobble.TrackName, scrobble.Plays))
+    }
+
+    log.Println(tweet.String(), len(tweet.String()))
+    twitter.Tweet(tweet.String())
+    return nil
+}
+
+func (s *Server) ShareTopWeeklyArtists(w http.ResponseWriter, r *http.Request) error {
+    username := r.Context().Value("username").(string)
+    user, err := s.authCfg.database.GetUser(r.Context(), username)
+    if err != nil && err != sql.ErrNoRows {
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    twitter := NewTwitter(username, TwitterConfig(s.authCfg.config.Twitter), s.authCfg.database)
+    err = twitter.AuthWithDB(context.Background())
+    if err != nil {
+        s.log.Error("Twitter Auth", "err", err)
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    results, _ := s.authCfg.database.GetTopArtistsOfWeek(r.Context(), database.GetTopArtistsOfWeekParams{
+        Limit: 7,
+        Uid: user.ID,
+    })
 
     var tweet strings.Builder
 
@@ -100,22 +170,92 @@ func (s *Server) ShareTopArtists(w http.ResponseWriter, r *http.Request) error {
     return nil
 }
 
-func (s *Server) ShareTopTracks(w http.ResponseWriter, r *http.Request) error {
+func (s *Server) ShareTopWeeklyTracks(w http.ResponseWriter, r *http.Request) error {
     username := r.Context().Value("username").(string)
+    user, err := s.authCfg.database.GetUser(r.Context(), username)
+    if err != nil && err != sql.ErrNoRows {
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
     twitter := NewTwitter(username, TwitterConfig(s.authCfg.config.Twitter), s.authCfg.database)
-    err := twitter.AuthWithDB(context.Background())
+    err = twitter.AuthWithDB(context.Background())
     if err != nil {
         s.log.Error("Twitter Auth", "err", err)
         return fmt.Errorf(INTERNAL_ERROR)
     }
 
-    results, _ := s.authCfg.database.GetTopTracksOfWeek(r.Context(), 5)
+    results, _ := s.authCfg.database.GetTopTracksOfWeek(r.Context(), database.GetTopTracksOfWeekParams{
+        Limit: 5,
+        Uid: user.ID,
+    })
 
     var tweet strings.Builder
 
     tweet.WriteString("Top songs this week:\n\n")
     for _, scrobble := range results {
         tweet.WriteString(fmt.Sprintf("%s - %s(%d)\n", scrobble.ArtistName, scrobble.TrackName, scrobble.Plays))
+    }
+
+    log.Println(tweet.String(), len(tweet.String()))
+    twitter.Tweet(tweet.String())
+    return nil
+}
+
+func (s *Server) ShareTopMonthlyAlbums(w http.ResponseWriter, r *http.Request) error {
+    username := r.Context().Value("username").(string)
+    user, err := s.authCfg.database.GetUser(r.Context(), username)
+    if err != nil && err != sql.ErrNoRows {
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    twitter := NewTwitter(username, TwitterConfig(s.authCfg.config.Twitter), s.authCfg.database)
+    err = twitter.AuthWithDB(context.Background())
+    if err != nil {
+        s.log.Error("Twitter Auth", "err", err)
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    results, _ := s.authCfg.database.GetTopAlbumsOfMonth(r.Context(), database.GetTopAlbumsOfMonthParams{
+        Limit: 10,
+        Uid: user.ID,
+    })
+
+    var tweet strings.Builder
+
+    tweet.WriteString("Top albums in the last month:\n\n")
+    for _, scrobble := range results {
+        tweet.WriteString(fmt.Sprintf("%s (%d)\n", scrobble.AlbumName, scrobble.Plays))
+    }
+
+    log.Println(tweet.String(), len(tweet.String()))
+    twitter.Tweet(tweet.String())
+    return nil
+}
+
+func (s *Server) ShareTopYearlyAlbums(w http.ResponseWriter, r *http.Request) error {
+    username := r.Context().Value("username").(string)
+    user, err := s.authCfg.database.GetUser(r.Context(), username)
+    if err != nil && err != sql.ErrNoRows {
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    twitter := NewTwitter(username, TwitterConfig(s.authCfg.config.Twitter), s.authCfg.database)
+    err = twitter.AuthWithDB(context.Background())
+    if err != nil {
+        s.log.Error("Twitter Auth", "err", err)
+        return fmt.Errorf(INTERNAL_ERROR)
+    }
+
+    results, _ := s.authCfg.database.GetTopAlbumsOfYear(r.Context(), database.GetTopAlbumsOfYearParams{
+        Limit: 10,
+        Uid: user.ID,
+    })
+
+    var tweet strings.Builder
+
+    tweet.WriteString("Top albums in the last year:\n\n")
+    for _, scrobble := range results {
+        tweet.WriteString(fmt.Sprintf("%s (%d)\n", scrobble.AlbumName, scrobble.Plays))
     }
 
     log.Println(tweet.String(), len(tweet.String()))
@@ -142,7 +282,7 @@ func (s *Server) ShareLatestTrack(w http.ResponseWriter, r *http.Request) error 
     playing := fmt.Sprintf("%s - %s", scrobble.ArtistName, scrobble.TrackName)
     tweet := fmt.Sprintf("Now Playing\n\n%s\nLink: %s\n", playing, yts.Search(playing))
     log.Println(tweet)
-    // twitter.Tweet(tweet)
+    twitter.Tweet(tweet)
     return nil
 }
 
@@ -260,6 +400,11 @@ func (s *Server) GetUserData(w http.ResponseWriter, r *http.Request) error {
         Timestamp string `json:"timestamp"`
     }
 
+    type Artist struct {
+        Name string `json:"name"`
+        Plays int `json:"plays"`
+    }
+
     type Track struct {
         Name string `json:"name"`
         Track string `json:"track"`
@@ -272,8 +417,14 @@ func (s *Server) GetUserData(w http.ResponseWriter, r *http.Request) error {
         Title string `json:"title"`
         Subtitle string `json:"subtitle"`
         Top struct {
-            Tracks []Track `json:"tracks"`
-            Artists []string `json:"artists"`
+            Daily struct {
+                Tracks []Track `json:"tracks"`
+                Artists []Artist `json:"artists"`
+            } `json:"daily"`
+            Weekly struct {
+                Tracks []Track `json:"tracks"`
+                Artists []Artist `json:"artists"`
+            } `json:"weekly"`
         } `json:"top"`
     }
 
@@ -289,18 +440,41 @@ func (s *Server) GetUserData(w http.ResponseWriter, r *http.Request) error {
 
     user, _ := s.authCfg.database.GetUser(r.Context(), username.(string))
     scrobble, _ := s.authCfg.database.GetLatestTrack(r.Context(), user.ID)
-    tracks, _ := s.authCfg.database.GetTopTracksOfWeek(r.Context(), 10)
-    artists, _ := s.authCfg.database.GetTopArtistsOfWeek(r.Context(), 10)
+    dailytracks, _ := s.authCfg.database.GetTopTracksOfDay(r.Context(), database.GetTopTracksOfDayParams{
+        Limit: 10,
+        Uid: user.ID,
+    })
+    dailyartists, _ := s.authCfg.database.GetTopArtistsOfDay(r.Context(), database.GetTopArtistsOfDayParams{
+        Limit: 10,
+        Uid: user.ID,
+    })
+    weeklytracks, _ := s.authCfg.database.GetTopTracksOfWeek(r.Context(), database.GetTopTracksOfWeekParams{
+        Limit: 10,
+        Uid: user.ID,
+    })
+    weeklyartists, _ := s.authCfg.database.GetTopArtistsOfWeek(r.Context(), database.GetTopArtistsOfWeekParams{
+        Limit: 10,
+        Uid: user.ID,
+    })
     timestamp := time.Unix(0, 0).Add(time.Duration(scrobble.Timestamp) * time.Millisecond)
 
-    data.Top.Tracks = make([]Track, 0)
+    data.Top.Daily.Tracks = make([]Track, 0)
+    data.Top.Weekly.Tracks = make([]Track, 0)
 
-    for _, row := range tracks {
-        data.Top.Tracks = append(data.Top.Tracks, Track{ Name: row.ArtistName, Plays: int(row.Plays), Track: row.TrackName })
+    for _, row := range dailytracks {
+        data.Top.Daily.Tracks = append(data.Top.Daily.Tracks, Track{ Name: row.ArtistName, Plays: int(row.Plays), Track: row.TrackName })
     } 
 
-    for _, row := range artists {
-        data.Top.Artists = append(data.Top.Artists, row.Artist)
+    for _, row := range dailyartists {
+        data.Top.Daily.Artists = append(data.Top.Daily.Artists, Artist{ Name: row.Artist, Plays: int(row.Plays) })
+    } 
+
+    for _, row := range weeklytracks {
+        data.Top.Weekly.Tracks = append(data.Top.Weekly.Tracks, Track{ Name: row.ArtistName, Plays: int(row.Plays), Track: row.TrackName })
+    } 
+
+    for _, row := range weeklyartists {
+        data.Top.Weekly.Artists = append(data.Top.Weekly.Artists, Artist{ Name: row.Artist, Plays: int(row.Plays) })
     } 
 
     data.LastScrobble = LastScrobble{
