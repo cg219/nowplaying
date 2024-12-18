@@ -24,4 +24,5 @@ func main() {
     }()
 
     <- ctx.Done()
+    log.Println("Exiting nowplaying safely")
 }

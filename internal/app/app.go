@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"time"
@@ -15,7 +16,7 @@ import (
 	"github.com/dghubble/oauth1"
 	"github.com/dghubble/oauth1/twitter"
 	"github.com/pressly/goose/v3"
-	_ "github.com/tursodatabase/libsql-client-go/libsql"
+	_ "modernc.org/sqlite"
 )
 
 type Config struct {
@@ -27,6 +28,9 @@ type Config struct {
         Name string `yaml:"name"`
         Url string `yaml:"url"`
         Token string `yaml:"token"`
+    }
+    Data struct {
+        Path string `yaml:"path"`
     }
     Spotify struct {
         Id string `yaml:"id"`
@@ -82,6 +86,7 @@ func NewConfig() *Config {
     cfg.Twitter.Redirect = os.Getenv("TWITTER_REDIRECT")
     cfg.Discogs.Key = os.Getenv("DISCOGS_KEY")
     cfg.Discogs.Secret = os.Getenv("DISCOGS_SECRET")
+    cfg.Data.Path = os.Getenv("APP_DATA")
     cfg.App.Id, _ = strconv.Atoi(os.Getenv("APP_UID"))
 
     return cfg
@@ -196,28 +201,14 @@ func Run(config Config) error {
         },
     }
 
-    // dbName := config.Turso.Name
-    dbUrl := config.Turso.Url
-    dbAuthToken := config.Turso.Token
-    tmp, err := os.MkdirTemp("", "libdata-*")
-
-    if  err != nil {
+    cwd, _ := os.Getwd();
+    db, err := sql.Open("sqlite", filepath.Join(cwd, config.Data.Path))
+    if err != nil {
         return err
     }
 
-    defer os.RemoveAll(tmp)
-    // dbPath := filepath.Join(tmp, dbName)
-    // conn, err := libsql.NewEmbeddedReplicaConnector(dbPath, dbUrl, libsql.WithAuthToken(dbAuthToken))
-
-    // if err != nil {
-        // return err
-    // }
-
-    // defer conn.Close()
-    // db := sql.OpenDB(conn)
-    conn := fmt.Sprintf("%s?authToken=%s", dbUrl, dbAuthToken)
-    db, _ := sql.Open("libsql", conn)
     defer db.Close()
+
     provider, err := goose.NewProvider(goose.DialectSQLite3, db, os.DirFS("./sql/migrations"))
 
     if err != nil {
@@ -229,7 +220,6 @@ func Run(config Config) error {
     if err != nil {
         return err
     }
-
 
     for _, r := range results {
         log.Printf("goose: %s, %s\n", r.Source.Path, r.Duration)
