@@ -2,7 +2,6 @@
 /// <reference types="vite/client" />
 
 import { mount } from 'svelte'
-import App from './pages/App.svelte'
 import Settings from "./pages/Settings.svelte"
 import Reset from "./pages/Reset.svelte"
 import User from "./pages/User.svelte"
@@ -10,7 +9,6 @@ import Auth from "./pages/Auth.svelte"
 
 const pages = new Map()
 
-pages.set("*", App)
 pages.set("settings", Settings)
 pages.set("reset", Reset)
 pages.set("user", User)

@@ -42,6 +42,10 @@ type Config struct {
         Secret string `yaml:"secret"`
         Redirect string `yaml:"redirect"`
     }
+    Discogs struct {
+        Key string `yaml:"key"`
+        Secret string `yaml:"secret"`
+    } `json:"discogs"`
 }
 
 type AppCfg struct {
@@ -76,6 +80,8 @@ func NewConfig() *Config {
     cfg.Twitter.Id = os.Getenv("TWITTER_ID")
     cfg.Twitter.Secret = os.Getenv("TWITTER_SECRET")
     cfg.Twitter.Redirect = os.Getenv("TWITTER_REDIRECT")
+    cfg.Discogs.Key = os.Getenv("DISCOGS_KEY")
+    cfg.Discogs.Secret = os.Getenv("DISCOGS_SECRET")
     cfg.App.Id, _ = strconv.Atoi(os.Getenv("APP_UID"))
 
     return cfg

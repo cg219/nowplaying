@@ -16,6 +16,25 @@ import (
 	"github.com/dghubble/oauth1"
 )
 
+type Artist struct {
+    Name string `json:"name"`
+    Plays int `json:"plays"`
+    Image string `json:"image"`
+}
+
+type Track struct {
+    Name string `json:"name"`
+    Track string `json:"track"`
+    Plays int `json:"plays"`
+    Image string `json:"image"`
+}
+
+type Album struct {
+    Name string `json:"name"`
+    Artist string `json:"artist"`
+    Plays int `json:"plays"`
+}
+
 func (s *Server) ResetPassword(w http.ResponseWriter, r *http.Request) error {
     resettimer := time.Now().Unix()
     type Body struct {
@@ -66,7 +85,7 @@ func (s *Server) ForgotPassword(w http.ResponseWriter, r *http.Request) error {
         ResetTime: sql.NullInt64{ Int64: resettimer, Valid: true },
         Username: username,
     })
-    
+
     if err != nil {
         s.log.Error("resetting pass", "err", err)
     }
@@ -400,17 +419,6 @@ func (s *Server) GetUserData(w http.ResponseWriter, r *http.Request) error {
         Timestamp string `json:"timestamp"`
     }
 
-    type Artist struct {
-        Name string `json:"name"`
-        Plays int `json:"plays"`
-    }
-
-    type Track struct {
-        Name string `json:"name"`
-        Track string `json:"track"`
-        Plays int `json:"plays"`
-    }
-
     type Data struct {
         LastScrobble LastScrobble `json:"lastScrobble"`
         NavLinks []NavLink `json:"links"`
@@ -476,6 +484,11 @@ func (s *Server) GetUserData(w http.ResponseWriter, r *http.Request) error {
     for _, row := range weeklyartists {
         data.Top.Weekly.Artists = append(data.Top.Weekly.Artists, Artist{ Name: row.Artist, Plays: int(row.Plays) })
     } 
+
+    loadTrackImages(data.Top.Daily.Tracks, s.authCfg.config)
+    loadTrackImages(data.Top.Weekly.Tracks, s.authCfg.config)
+    loadArtistImages(data.Top.Daily.Artists, s.authCfg.config)
+    loadArtistImages(data.Top.Weekly.Artists, s.authCfg.config)
 
     data.LastScrobble = LastScrobble{
         ArtistName: scrobble.ArtistName,
