@@ -7,8 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"log/slog"
 	"net/http"
+	"os/signal"
+	"syscall"
 
 	// _ "net/http/pprof"
 	"os"
@@ -504,5 +507,23 @@ func StartServer(cfg *AppCfg) error {
 
     addRoutes(srv)
 
-    return http.ListenAndServe(fmt.Sprintf("0.0.0.0:%s", os.Getenv("PORT")), srv.mux)
+    server := &http.Server{
+        Addr: fmt.Sprintf("0.0.0.0:%s", os.Getenv("PORT")),
+        Handler: srv.mux,
+    }
+
+    go func(s *http.Server) {
+        ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+        defer stop()
+
+        <- ctx.Done()
+
+        log.Println("Shutting Down Server")
+
+        if err := s.Shutdown(ctx); err != nil {
+            log.Println("Shutdown error")
+        }
+    }(server)
+
+    return server.ListenAndServe()
 }

@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/cg219/nowplaying/internal/database"
@@ -179,12 +181,11 @@ func AppLoop(cfg *AppCfg) bool {
     }()
 
     <- exit
-    
+    log.Println("Exiting AppLoop()")
+
     if cfg.haveNewSessions {
         restartLoop = true
-        log.Println("restart loop")
     }
-
     return restartLoop
 }
 
@@ -231,11 +232,36 @@ func Run(config Config) error {
         StartServer(cfg)
     }()
 
-    for {
-        log.Println("running...")
+    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+    defer stop()
+
+    done := make(chan struct{})
+    run := make(chan struct{})
+
+    loop := func() {
+        log.Println("running AppLoop()")
         restart := AppLoop(cfg)
+
         if !restart {
+            close(done)
+        } else {
+            run <- struct{}{}
+        }
+    }
+
+    go loop()
+
+    for {
+        select {
+        case <- ctx.Done():
+            log.Println("terminating AppLoop()")
             return nil
+        case <-done:
+            log.Println("AppLoop() complete")
+            return nil
+        case <-run:
+            log.Println("restart AppLoop()")
+            go loop()
         }
     }
 }

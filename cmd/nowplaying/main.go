@@ -1,28 +1,28 @@
 package main
 
 import (
-	"context"
 	_ "embed"
 	"log"
-	"os/signal"
-	"syscall"
 
 	"github.com/cg219/nowplaying/internal/app"
 )
 
 func main() {
-    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-    defer stop()
-
     cfg := app.NewConfig()
+    done := make(chan struct{})
 
     go func() {
         if err := app.Run(*cfg); err != nil {
             log.Fatal(err)
+            close(done)
+            return
         }
+        log.Println("Exiting app func")
 
+        close(done)
     }()
 
-    <- ctx.Done()
+    <- done
+
     log.Println("Exiting nowplaying safely")
 }
