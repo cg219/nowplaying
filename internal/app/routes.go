@@ -59,7 +59,7 @@ func (s *Server) NotifyScrobble(w http.ResponseWriter, r *http.Request) error {
     type Data struct {
         ArtistName string `json:"artistName"`
         TrackName string `json:"trackName"`
-        Timestamp string `json:"timestamp"`
+        Timestamp int `json:"timestamp"`
     }
 
     subscriber := GetScrobbleSubscriber()
@@ -74,7 +74,7 @@ func (s *Server) NotifyScrobble(w http.ResponseWriter, r *http.Request) error {
             data := Data{
                 ArtistName: scrobble.ArtistName,
                 TrackName: scrobble.TrackName,
-                Timestamp: time.Unix(0, 0).Add(time.Duration(scrobble.Timestamp) * time.Millisecond).Format("01/02/2006 - 03:04PM"),
+                Timestamp: int(time.Unix(0, 0).Add(time.Duration(scrobble.Timestamp) * time.Millisecond).UnixMilli()),
             }
             encoded, _ := json.Marshal(data)
             fmt.Fprintf(w, "event: scrobble\ndata: %s\n\n", string(encoded))
@@ -464,7 +464,7 @@ func (s *Server) GetUserData(w http.ResponseWriter, r *http.Request) error {
     type LastScrobble struct {
         ArtistName string `json:"artistName"`
         TrackName string `json:"trackName"`
-        Timestamp string `json:"timestamp"`
+        Timestamp int `json:"timestamp"`
     }
 
     type Data struct {
@@ -512,7 +512,7 @@ func (s *Server) GetUserData(w http.ResponseWriter, r *http.Request) error {
         Limit: 10,
         Uid: user.ID,
     })
-    timestamp := time.Unix(0, 0).Add(time.Duration(scrobble.Timestamp) * time.Millisecond)
+    timestamp := time.Unix(0, 0).Add(time.Duration(scrobble.Timestamp) * time.Millisecond).UnixMilli()
 
     data.Top.Daily.Tracks = make([]Track, 0)
     data.Top.Weekly.Tracks = make([]Track, 0)
@@ -541,7 +541,7 @@ func (s *Server) GetUserData(w http.ResponseWriter, r *http.Request) error {
     data.LastScrobble = LastScrobble{
         ArtistName: scrobble.ArtistName,
         TrackName: scrobble.TrackName,
-        Timestamp: timestamp.Format("01/02/2006 - 03:04PM"),
+        Timestamp: int(timestamp),
     }
 
     encode(w, 200, data)

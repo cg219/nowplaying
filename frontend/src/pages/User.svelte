@@ -2,6 +2,7 @@
     import Layout from "../lib/Layout.svelte";
     import type { Link } from "../lib/customtypes.ts";
     import type { Action } from "svelte/action";
+    import { Temporal } from "temporal-polyfill";
 
     let artist: string = $state("")
     let track: string = $state("")
@@ -105,6 +106,21 @@
         await res.json()
     }
 
+    function formatDate(timestamp: number) :string {
+        const instant = Temporal.Instant.fromEpochMilliseconds(timestamp)
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+        const zoned = instant.toZonedDateTimeISO(timezone)
+
+        return zoned.toLocaleString("en-US", {
+            month: "2-digit",
+            day: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true
+        })
+    }
+
     const init: Action = () => {
         $effect(() => {
             getData().then((data) => {
@@ -137,7 +153,7 @@
         <div class="last-scrobble">
             <p class="artist">{artist}</p>
             <p class="track">{track}</p>
-            <p class="date">{timestamp}</p>
+            <p class="date">{formatDate(parseInt(timestamp))}</p>
         </div>
         <p>
             <button onclick={shareLatestTrack}>Share Latest on Twitter</button>
