@@ -38,15 +38,19 @@ type Album struct {
 
 type ScrobbleSubscriber struct {
     Scrobbles chan Scrobble
+    Username string
 }
 
-func (ss *ScrobbleSubscriber) Execute(scrobble Scrobble) {
-    ss.Scrobbles <- scrobble
+func (ss *ScrobbleSubscriber) Execute(scrobble Scrobble, username string) {
+    if strings.EqualFold(username, ss.Username) {
+        ss.Scrobbles <- scrobble
+    }
 }
 
-func GetScrobbleSubscriber() *ScrobbleSubscriber {
+func GetScrobbleSubscriber(username string) *ScrobbleSubscriber {
     return &ScrobbleSubscriber{
         Scrobbles: make(chan Scrobble),
+        Username: username,
     }
 }
 
@@ -62,7 +66,7 @@ func (s *Server) NotifyScrobble(w http.ResponseWriter, r *http.Request) error {
         Timestamp int `json:"timestamp"`
     }
 
-    subscriber := GetScrobbleSubscriber()
+    subscriber := GetScrobbleSubscriber(r.Context().Value("username").(string))
     id := s.authCfg.Register(subscriber)
 
     for {

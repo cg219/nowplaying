@@ -79,11 +79,11 @@ type Session interface {
 type Publisher interface {
     Register(sub Subscriber) int64
     Unregister(id int64)
-    Notify(scrobble Scrobble)
+    Notify(scrobble Scrobble, username string)
 }
 
 type Subscriber interface {
-    Execute(scrobble Scrobble)
+    Execute(scrobble Scrobble, username string)
 }
 
 func (cfg *AppCfg) Register(sub Subscriber) int64 {
@@ -107,12 +107,12 @@ func (cfg *AppCfg) Unregister(id int64) {
     delete(cfg.subscribers, id)
 }
 
-func (cfg *AppCfg) Notify(scrobble Scrobble) {
+func (cfg *AppCfg) Notify(scrobble Scrobble, username string) {
     cfg.subMutex.RLock()
     defer cfg.subMutex.RUnlock()
 
     for _, sub := range cfg.subscribers {
-        sub.Execute(scrobble)
+        sub.Execute(scrobble, username)
     }
 }
 
@@ -221,7 +221,7 @@ func AppLoop(cfg *AppCfg) bool {
 
                 if ok := scrobbler.Scrobble(context.Background(), scrobble); ok {
                     log.Printf("SCROBBLED: %s - %s\n", v.Song.Artist, v.Song.Name)
-                    cfg.Notify(scrobble)
+                    cfg.Notify(scrobble, v.Username)
                 }
             }
         }

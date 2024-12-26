@@ -138,7 +138,7 @@
         })
     }
 
-    const sse = new EventSource("/api/events/scrobble");
+    const sse = new EventSource("/api/events/scrobble", { withCredentials: true });
     sse.addEventListener("scrobble", (e) => {
         const data = JSON.parse(e.data) as LastScrobble
 
