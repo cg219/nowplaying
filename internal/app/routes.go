@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -33,6 +34,53 @@ type Album struct {
     Name string `json:"name"`
     Artist string `json:"artist"`
     Plays int `json:"plays"`
+}
+
+type ScrobbleSubscriber struct {
+    Scrobbles chan Scrobble
+}
+
+func (ss *ScrobbleSubscriber) Execute(scrobble Scrobble) {
+    ss.Scrobbles <- scrobble
+}
+
+func GetScrobbleSubscriber() *ScrobbleSubscriber {
+    return &ScrobbleSubscriber{
+        Scrobbles: make(chan Scrobble),
+    }
+}
+
+func (s *Server) NotifyScrobble(w http.ResponseWriter, r *http.Request) error {
+    w.Header().Set("Content-Type", "text/event-stream")
+    w.Header().Set("Cache-Control", "no-cache")
+    w.Header().Set("Connection", "keep-alive")
+    w.WriteHeader(200)
+
+    type Data struct {
+        ArtistName string `json:"artistName"`
+        TrackName string `json:"trackName"`
+        Timestamp string `json:"timestamp"`
+    }
+
+    subscriber := GetScrobbleSubscriber()
+    id := s.authCfg.Register(subscriber)
+
+    for {
+        select {
+        case <- r.Context().Done():
+            s.authCfg.Unregister(id)
+            return nil
+        case scrobble := <- subscriber.Scrobbles:
+            data := Data{
+                ArtistName: scrobble.ArtistName,
+                TrackName: scrobble.TrackName,
+                Timestamp: time.Unix(0, 0).Add(time.Duration(scrobble.Timestamp) * time.Millisecond).Format("01/02/2006 - 03:04PM"),
+            }
+            encoded, _ := json.Marshal(data)
+            fmt.Fprintf(w, "event: scrobble\ndata: %s\n\n", string(encoded))
+            w.(http.Flusher).Flush()
+        }
+    }
 }
 
 func (s *Server) ResetPassword(w http.ResponseWriter, r *http.Request) error {

@@ -122,23 +122,13 @@
         })
     }
 
-    $effect(() => {
-        const id = setInterval(async () => {
-            if (document.hasFocus()) {
-                const res = await fetch("/api/last-scrobble", {
-                    method: "GET",
-                    credentials: "same-origin"
-                })
+    const sse = new EventSource("/api/events/scrobble");
+    sse.addEventListener("scrobble", (e) => {
+        const data = JSON.parse(e.data) as LastScrobble
 
-                const data = await res.json() as LastScrobble
-
-                artist = data.artistName
-                track = data.trackName
-                timestamp = data.timestamp
-            }
-        }, 10 * 1000)
-
-        return () => clearInterval(id)
+        artist = data.artistName
+        track = data.trackName
+        timestamp = data.timestamp
     })
 </script>
 <div use:init>

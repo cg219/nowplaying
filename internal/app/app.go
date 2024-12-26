@@ -2,15 +2,18 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
 	"log"
+	"math/big"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -62,6 +65,8 @@ type AppCfg struct {
     listenInterval time.Ticker
     database *database.Queries
     haveNewSessions bool
+    subscribers map[int64]Subscriber
+    subMutex sync.RWMutex
 }
 
 type Session interface {
@@ -69,6 +74,46 @@ type Session interface {
     Listen(context.Context, *chan any, chan bool)
     Encode() []byte
     Decode([]byte) error
+}
+
+type Publisher interface {
+    Register(sub Subscriber) int64
+    Unregister(id int64)
+    Notify(scrobble Scrobble)
+}
+
+type Subscriber interface {
+    Execute(scrobble Scrobble)
+}
+
+func (cfg *AppCfg) Register(sub Subscriber) int64 {
+    id, err := rand.Int(rand.Reader, big.NewInt(100000))
+    if err != nil {
+        log.Printf("err creating random int %s", err.Error())
+        return -1
+    }
+
+    cfg.subMutex.Lock()
+    defer cfg.subMutex.Unlock()
+
+    cfg.subscribers[id.Int64()] = sub
+    return id.Int64()
+}
+
+func (cfg *AppCfg) Unregister(id int64) {
+    cfg.subMutex.Lock()
+    defer cfg.subMutex.Unlock()
+
+    delete(cfg.subscribers, id)
+}
+
+func (cfg *AppCfg) Notify(scrobble Scrobble) {
+    cfg.subMutex.RLock()
+    defer cfg.subMutex.RUnlock()
+
+    for _, sub := range cfg.subscribers {
+        sub.Execute(scrobble)
+    }
 }
 
 func NewConfig() *Config {
@@ -161,7 +206,7 @@ func AppLoop(cfg *AppCfg) bool {
             case SpotifyListenValue:
                 user, _ := cfg.database.GetUser(context.Background(), v.Username)
                 scrobbler := NewScrobbler(v.Username, cfg.database)
-                if ok := scrobbler.Scrobble(context.Background(), Scrobble{
+                scrobble := Scrobble{
                     ArtistName: v.Song.Artist,
                     TrackName: v.Song.Name,
                     AlbumName: v.Song.Album.Name,
@@ -172,10 +217,12 @@ func AppLoop(cfg *AppCfg) bool {
                     Source: "spotify-local",
                     Uid: int(user.ID),
                     Progress: v.Song.Progress,
-                }); ok {
-                    log.Printf("SCROBBLED: %s - %s\n", v.Song.Artist, v.Song.Name)
                 }
 
+                if ok := scrobbler.Scrobble(context.Background(), scrobble); ok {
+                    log.Printf("SCROBBLED: %s - %s\n", v.Song.Artist, v.Song.Name)
+                    cfg.Notify(scrobble)
+                }
             }
         }
     }()
@@ -200,6 +247,7 @@ func Run(config Config) error {
             CallbackURL: config.Twitter.Redirect,
             Endpoint: twitter.AuthorizeEndpoint,
         },
+        subscribers: make(map[int64]Subscriber), 
     }
 
     cwd, _ := os.Getwd();
