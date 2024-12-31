@@ -1,7 +1,6 @@
 package app
 
 import (
-	// "bytes"
 	"context"
 	"crypto/md5"
 	"database/sql"
@@ -223,19 +222,6 @@ func (l *LastFM) Scrobble(ctx context.Context, sc LastFMScrobble) error {
     d, _ := io.ReadAll(resp.Body)
 
     log.Printf("SE: %s", d)
-
-    // var tracklist map[string]any
-    // err = json.NewDecoder(resp.Body).Decode(&tracklist)
-    // if err != nil {
-    //     log.Println("decode")
-    //     return err
-    // }
-    //
-    // log.Println("Output---")
-    // for k, v := range tracklist {
-    //     log.Printf("%s: %s\n", k, v)
-    // }
-    // log.Println("---------")
 
     return nil
 }

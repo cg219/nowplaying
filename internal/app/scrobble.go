@@ -82,7 +82,7 @@ func (s *Scrobbler) Decode(encoded []byte) error {
     var data ScrobbleEncoded
     err := json.Unmarshal(encoded, &data)
     if err != nil {
-        return fmt.Errorf("unmarshal fail: ", err)
+        return fmt.Errorf("unmarshal fail: %s", err.Error())
     }
 
     s.Username = data.Username
@@ -144,8 +144,6 @@ func scrobbleToParams(sc Scrobble) database.SaveScrobbleParams {
 }
 
 func (s *Scrobbler) CheckLastTrack(ctx context.Context) error {
-    // log.Printf("LastFM: %s - %s\n",tracklist.Recent.Tracks[0].Artist.Name, tracklist.Recent.Tracks[0].Name)
-
     user, _ := s.db.GetUser(ctx, s.Username)
     dbValue, err := s.db.GetLatestTrack(ctx, user.ID)
     if err != nil {

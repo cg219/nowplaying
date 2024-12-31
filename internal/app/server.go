@@ -12,8 +12,6 @@ import (
 	"net/http"
 	"os/signal"
 	"syscall"
-
-	// _ "net/http/pprof"
 	"os"
 	"strings"
 	"time"
@@ -126,117 +124,24 @@ func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
-    // page := Page{
-    //     SiteTitle: "Now Playing",
-    //     Title: "Login",
-    //     Subtitle: "Sign into platform",
-    // }
     tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/auth.html"))
     tmpl.Execute(w, nil)
     return nil
 }
 
 func (s *Server) getUserPage(w http.ResponseWriter, r *http.Request) error {
-    // page := Page{
-    //     SiteTitle: "Now Playing - My Page",
-    //     Title: "My Page",
-    //     Subtitle: "See my activity",
-    //     NavLinks: []NavLink{
-    //         { Name: "My Page", Current: true, Url: "/me"},
-    //         { Name: "Settings", Url: "/settings"},
-    //     },
-    // }
     tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/user.html"))
     tmpl.Execute(w, nil)
     return nil
 }
 
 func (s *Server) getResetPage(w http.ResponseWriter, r *http.Request) error {
-    // reset := r.PathValue("resetvalue")
-
-    // dbValue, _ := s.authCfg.database.CanResetPassword(r.Context(), database.CanResetPasswordParams{
-    //     ResetTime: sql.NullInt64{ Int64: time.Now().Unix(), Valid: true },
-    //     Reset: sql.NullString{ String: reset, Valid: true },
-    // })
-
-    // page := &struct{
-    //     Valid bool
-    //     Username string
-    //     Reset string
-    // }{ Valid: dbValue.Valid, Username: dbValue.Username, Reset: reset }
-
     tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/reset.html"))
     tmpl.Execute(w, nil)
     return nil
 }
 
 func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
-    // user, err := s.authCfg.database.GetUser(r.Context(), r.Context().Value("username").(string))
-    // if err != nil && err != sql.ErrNoRows {
-    //     return err
-    // }
-    //
-    // sessions, err := s.authCfg.database.GetUserMusicSessions(r.Context(), user.ID)
-    // if err != nil && err != sql.ErrNoRows {
-    //     return err
-    // }
-    //
-    // spotify, err := s.authCfg.database.GetSpotifySession(r.Context(), r.Context().Value("username").(string))
-    // if err != nil && err != sql.ErrNoRows {
-    //     return err
-    // }
-    //
-    // twitter, err := s.authCfg.database.GetTwitterSession(r.Context(), r.Context().Value("username").(string))
-    // if err != nil && err != sql.ErrNoRows {
-    //     return err
-    // }
-    //
-    // page := &struct{
-    //     SpotifyTrack string
-    //     SpotifyAuthURL string
-    //     SpotifyOn bool
-    //     TwitterOn bool
-    //     TwitterAuthURL string
-    //     Javascript template.JS
-    //     Page
-    // }{}
-    //
-    // page.SiteTitle = "Now Playing - Settings"
-    // page.Title = "Settings"
-    // page.Subtitle = "Configure your preferences"
-    // page.NavLinks = []NavLink{
-    //     { Name: "My Page", Url: "/me"},
-    //     { Name: "Settings", Current: true, Url: "/settings"},
-    // }
-    //
-    // if spotify.SpotifyAccessToken.Valid && spotify.SpotifyRefreshToken.Valid {
-    //     page.SpotifyOn = true
-    // } else {
-    //     page.SpotifyAuthURL = GetSpotifyAuthURL(r.Context(), user.Username, SpotifyConfig{
-    //         Id: s.authCfg.config.Spotify.Id,
-    //         Redirect: s.authCfg.config.Spotify.Redirect,
-    //         Secret: s.authCfg.config.Spotify.Secret,
-    //     }, s.authCfg.database)
-    // }
-    //
-    // for _, v := range sessions {
-    //     if strings.EqualFold(v.Type, "spotify") {
-    //         if v.Active == 1 {
-    //             page.SpotifyTrack = "checked"
-    //         }
-    //     }
-    // }
-    //
-    // if twitter.TwitterOauthToken.Valid && twitter.TwitterOauthSecret.Valid {
-    //     page.TwitterOn = true
-    // } else {
-    //     page.TwitterAuthURL = GetAuthURL(context.Background(), s.authCfg.TwitterOAuth, s.authCfg.database, user.Username)
-    // }
-    //
-    // buffer := new(bytes.Buffer)
-    // scripts := template.Must(template.ParseFiles("js/settings.js"))
-    // scripts.Execute(buffer, nil)
-    // page.Javascript = template.JS(buffer.String())
     tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/settings.html"))
     tmpl.Execute(w, nil)
     return nil

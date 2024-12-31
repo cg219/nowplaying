@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -42,10 +41,6 @@ type Config struct {
         Secret string `yaml:"secret"`
         Redirect string `yaml:"redirect"`
     } `yaml:"spotify"`
-    App struct {
-        Name string `yaml:"name"`
-        Id int `yaml:"id"`
-    } `yaml:"app"`
     Twitter struct {
         Id string `yaml:"id"`
         Secret string `yaml:"secret"`
@@ -59,7 +54,6 @@ type Config struct {
 
 type AppCfg struct {
     config Config
-    username string
     LastFMSession *LastFM
     TwitterOAuth oauth1.Config
     listenInterval time.Ticker
@@ -127,14 +121,12 @@ func NewConfig() *Config {
     cfg.Spotify.Id = os.Getenv("SPOTIFY_ID")
     cfg.Spotify.Secret = os.Getenv("SPOTIFY_SECRET")
     cfg.Spotify.Redirect = os.Getenv("SPOTIFY_REDIRECT")
-    cfg.App.Name = os.Getenv("APP_USERNAME")
     cfg.Twitter.Id = os.Getenv("TWITTER_ID")
     cfg.Twitter.Secret = os.Getenv("TWITTER_SECRET")
     cfg.Twitter.Redirect = os.Getenv("TWITTER_REDIRECT")
     cfg.Discogs.Key = os.Getenv("DISCOGS_KEY")
     cfg.Discogs.Secret = os.Getenv("DISCOGS_SECRET")
     cfg.Data.Path = os.Getenv("APP_DATA")
-    cfg.App.Id, _ = strconv.Atoi(os.Getenv("APP_UID"))
 
     return cfg
 }
@@ -239,7 +231,6 @@ func AppLoop(cfg *AppCfg) bool {
 func Run(config Config) error {
     cfg := &AppCfg{
         config: config,
-        username: config.App.Name,
         listenInterval: *time.NewTicker(5 * time.Second),
         TwitterOAuth: oauth1.Config {
             ConsumerKey: config.Twitter.Id,

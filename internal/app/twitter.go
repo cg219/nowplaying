@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/cg219/nowplaying/internal/database"
@@ -62,7 +63,12 @@ func (t *Twitter) Tweet(status string) {
     req, _ := http.NewRequest("POST", endpoint, bytes.NewReader(data))
     req.Header.Set("Content-Type", "application/json")
 
-    res, _ := t.client.Do(req)
+    res, err := t.client.Do(req)
+
+    if err != nil {
+        log.Fatal(err.Error())
+    }
+
     defer res.Body.Close()
 
     postRes, _ := io.ReadAll(res.Body)

@@ -295,7 +295,7 @@ func (s *Server) ShareTopMonthlyAlbums(w http.ResponseWriter, r *http.Request) e
 
     tweet.WriteString("Top albums in the last month:\n\n")
     for _, scrobble := range results {
-        tweet.WriteString(fmt.Sprintf("%s (%d)\n", scrobble.AlbumName, scrobble.Plays))
+        tweet.WriteString(fmt.Sprintf("%s (%d)\n", scrobble.AlbumName.String, scrobble.Plays))
     }
 
     log.Println(tweet.String(), len(tweet.String()))
@@ -326,7 +326,7 @@ func (s *Server) ShareTopYearlyAlbums(w http.ResponseWriter, r *http.Request) er
 
     tweet.WriteString("Top albums in the last year:\n\n")
     for _, scrobble := range results {
-        tweet.WriteString(fmt.Sprintf("%s (%d)\n", scrobble.AlbumName, scrobble.Plays))
+        tweet.WriteString(fmt.Sprintf("%s (%d)\n", scrobble.AlbumName.String, scrobble.Plays))
     }
 
     log.Println(tweet.String(), len(tweet.String()))
