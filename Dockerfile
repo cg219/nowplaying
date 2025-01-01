@@ -8,7 +8,7 @@ WORKDIR /build
 COPY go.* ./
 RUN go mod download
 COPY . .
-RUN go build -o nowplaying cmd/nowplaying/main.go
+RUN go build -o nowplaying nowplaying.go
 
 FROM ubuntu:latest AS staging
 RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates

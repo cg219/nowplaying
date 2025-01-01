@@ -6,14 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"html/template"
+	"io/fs"
 	"log"
 	"log/slog"
 	"net/http"
-	"os/signal"
-	"syscall"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cg219/nowplaying/internal/database"
@@ -83,11 +83,18 @@ func NewServer(cfg *AppCfg) *Server {
 }
 
 func addRoutes(srv *Server) {
+    static, err := fs.Sub(srv.authCfg.config.Frontend, "static/assets")
+
+    if err != nil {
+        log.Fatal("error creating file subsystem")
+    }
+
     srv.mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
         w.WriteHeader(http.StatusNotFound)
     })
+
     srv.mux.Handle("GET /", srv.handle(srv.RedirectAuthenticated("/me", true), srv.getLoginPage))
-    srv.mux.Handle("GET /assets/", http.FileServer(http.Dir("./frontend/dist")))
+    srv.mux.Handle("GET /assets/", http.StripPrefix("/assets", http.FileServer(http.FS(static))))
     srv.mux.Handle("POST /api/login", srv.handle(srv.LogUserIn))
     srv.mux.Handle("POST /api/logout", srv.handle(srv.UserOnly, srv.LogUserOut))
     srv.mux.Handle("POST /api/settings", srv.handle(srv.UserOnly, srv.GetSettingsData))
@@ -123,27 +130,34 @@ func (h CandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+func (s *Server) getFile(w http.ResponseWriter, filepath string) {
+    data, err := s.authCfg.config.Frontend.ReadFile(filepath)
+    if err != nil {
+        s.log.Error("getting file", "path", filepath)
+        return
+    }
+
+    w.Header().Add("Content-Type", "text/html")
+    w.Write(data)
+}
+
 func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
-    tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/auth.html"))
-    tmpl.Execute(w, nil)
+    s.getFile(w, "static/entrypoints/auth.html")
     return nil
 }
 
 func (s *Server) getUserPage(w http.ResponseWriter, r *http.Request) error {
-    tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/user.html"))
-    tmpl.Execute(w, nil)
+    s.getFile(w, "static/entrypoints/user.html")
     return nil
 }
 
 func (s *Server) getResetPage(w http.ResponseWriter, r *http.Request) error {
-    tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/reset.html"))
-    tmpl.Execute(w, nil)
+    s.getFile(w, "static/entrypoints/reset.html")
     return nil
 }
 
 func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
-    tmpl := template.Must(template.ParseFiles("frontend/dist/entrypoints/settings.html"))
-    tmpl.Execute(w, nil)
+    s.getFile(w, "static/entrypoints/settings.html")
     return nil
 }
 

@@ -106,7 +106,7 @@ func (t *Token) Create(issuer string) error {
     })
 
     if err != nil {
-        return fmt.Errorf("Error creating %s token. val: %t, err %s", cmp.Or(t.Name, "new"), t.subject, err)
+        return fmt.Errorf("Error creating %s token. val: %v, err %s", cmp.Or(t.Name, "new"), t.subject, err)
     }
 
     token := jwt.NewWithClaims(jwt.SigningMethodHS256, &jwt.RegisteredClaims{
@@ -119,7 +119,7 @@ func (t *Token) Create(issuer string) error {
     stoken, err := token.SignedString([]byte(t.secret))
 
     if err != nil {
-        return fmt.Errorf("Error creating %s token. val: %t, err %s", cmp.Or(t.Name, "new"), t.subject, err)
+        return fmt.Errorf("Error creating %s token. val: %v, err %s", cmp.Or(t.Name, "new"), t.subject, err)
     }
 
     t.value = stoken

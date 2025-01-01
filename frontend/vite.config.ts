@@ -13,7 +13,7 @@ export default defineConfig({
                 reset: resolve(import.meta.dirname!,  "entrypoints/reset.html")
             },
             output: {
-                dir: "dist"
+                dir: "../static-app"
             }
         }
     }

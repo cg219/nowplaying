@@ -1,4 +1,4 @@
-package main
+package spotup
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type Entry struct {
     Album string `json:"master_metadata_album_album_name"`
 }
 
-func main() {
+func Run() {
     slog.Info("Starting Spotify Upload")
     if len(os.Args) == 1 {
         log.Fatal("please add path to spotify export")

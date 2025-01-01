@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
-	_ "embed"
+	"embed"
 	"fmt"
 	"io"
 	"log"
@@ -19,8 +19,14 @@ import (
 	"github.com/cg219/nowplaying/internal/app"
 )
 
+//go:embed static-app
+var Frontend embed.FS
+
+//go:embed sql/migrations/*.sql
+var Migrations embed.FS
+
 func main() {
-    cfg := app.NewConfig()
+    cfg := app.NewConfig(Frontend, Migrations)
     done := make(chan struct{})
     cwd, _ := os.Getwd();
     s3cfg, err := config.LoadDefaultConfig(context.Background(), config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(os.Getenv("R2_KEY"), os.Getenv("R2_SECRET"), "")), config.WithRegion("auto"))

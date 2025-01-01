@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"embed"
 	"encoding/base64"
 	"fmt"
 	"log"
@@ -50,6 +51,8 @@ type Config struct {
         Key string `yaml:"key"`
         Secret string `yaml:"secret"`
     } `json:"discogs"`
+    Frontend embed.FS
+    Migrations embed.FS
 }
 
 type AppCfg struct {
@@ -110,7 +113,7 @@ func (cfg *AppCfg) Notify(scrobble Scrobble, username string) {
     }
 }
 
-func NewConfig() *Config {
+func NewConfig(frontend embed.FS, migrations embed.FS) *Config {
     cfg := &Config{}
 
     cfg.LastFM.Key = os.Getenv("LASTFM_KEY")
@@ -127,6 +130,8 @@ func NewConfig() *Config {
     cfg.Discogs.Key = os.Getenv("DISCOGS_KEY")
     cfg.Discogs.Secret = os.Getenv("DISCOGS_SECRET")
     cfg.Data.Path = os.Getenv("APP_DATA")
+    cfg.Frontend = frontend
+    cfg.Migrations = migrations
 
     return cfg
 }
@@ -249,20 +254,11 @@ func Run(config Config) error {
 
     defer db.Close()
 
-    provider, err := goose.NewProvider(goose.DialectSQLite3, db, os.DirFS("./sql/migrations"))
+    goose.SetBaseFS(config.Migrations)
+    goose.SetDialect("sqlite3")
 
-    if err != nil {
+    if err := goose.Up(db, "sql/migrations"); err != nil {
         return err
-    }
-
-    results, err := provider.Up(context.Background())
-
-    if err != nil {
-        return err
-    }
-
-    for _, r := range results {
-        log.Printf("goose: %s, %s\n", r.Source.Path, r.Duration)
     }
 
     cfg.database = database.New(db)

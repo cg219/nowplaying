@@ -2,6 +2,7 @@
 .envrc
 **build
 **dist
+static-app
 **node_modules
 tmp
 data

@@ -1,8 +1,0 @@
-{{template "base" .}}
-{{ define "content"}}
-<form class="container" id="login" method="POST" action="/api/login" hx-boost="true">
-    <input type="text" name="username" placeholder="Username" />
-    <input type="password" name="password" placeholder="Password" />
-    <button type="submit">Login</button>
-</form>
-{{end}}
