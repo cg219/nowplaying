@@ -83,7 +83,7 @@ func NewServer(cfg *AppCfg) *Server {
 }
 
 func addRoutes(srv *Server) {
-    static, err := fs.Sub(srv.authCfg.config.Frontend, "static/assets")
+    static, err := fs.Sub(srv.authCfg.config.Frontend, "static-app/assets")
 
     if err != nil {
         log.Fatal("error creating file subsystem")
@@ -142,22 +142,22 @@ func (s *Server) getFile(w http.ResponseWriter, filepath string) {
 }
 
 func (s *Server) getLoginPage(w http.ResponseWriter, r *http.Request) error {
-    s.getFile(w, "static/entrypoints/auth.html")
+    s.getFile(w, "static-app/entrypoints/auth.html")
     return nil
 }
 
 func (s *Server) getUserPage(w http.ResponseWriter, r *http.Request) error {
-    s.getFile(w, "static/entrypoints/user.html")
+    s.getFile(w, "static-app/entrypoints/user.html")
     return nil
 }
 
 func (s *Server) getResetPage(w http.ResponseWriter, r *http.Request) error {
-    s.getFile(w, "static/entrypoints/reset.html")
+    s.getFile(w, "static-app/entrypoints/reset.html")
     return nil
 }
 
 func (s *Server) getSettingsPage(w http.ResponseWriter, r *http.Request) error {
-    s.getFile(w, "static/entrypoints/settings.html")
+    s.getFile(w, "static-app/entrypoints/settings.html")
     return nil
 }
 

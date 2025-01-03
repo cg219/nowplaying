@@ -1,0 +1,19 @@
+services:
+  nowplaying:
+    build:
+      context: .
+      target: staging
+    working_dir: /app
+    environment:
+      - PORT=8080
+    env_file:
+      - .env
+    command: /usr/local/bin/nowplaying
+    ports:
+      - 3006:8080
+    volumes:
+      - $PWD:/app
+      - nowplaying-data:/app/data
+
+volumes:
+  nowplaying-data:

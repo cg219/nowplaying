@@ -26,17 +26,40 @@ var Frontend embed.FS
 var Migrations embed.FS
 
 func main() {
-    cfg := app.NewConfig(Frontend, Migrations)
+    var cfg *app.Config
     done := make(chan struct{})
     cwd, _ := os.Getwd();
-    s3cfg, err := config.LoadDefaultConfig(context.Background(), config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(os.Getenv("R2_KEY"), os.Getenv("R2_SECRET"), "")), config.WithRegion("auto"))
+
+    secretsPath := os.Getenv("NP_CREDTENTIALS")
+    _, err := os.Stat(secretsPath)
+
+    if err != nil {
+        if os.IsNotExist(err) {
+            log.Printf("secrets file not found: %s\nFalling back to env variables\n", secretsPath)
+            cfg = app.NewConfig(Frontend, Migrations)
+        } else if os.IsPermission(err) {
+            log.Printf("incorrect permissions on secret file: %s\nFalling back to env variables\n", secretsPath)
+            cfg = app.NewConfig(Frontend, Migrations)
+        } else {
+            log.Fatal(err)
+        }
+    } else {
+        data, err := os.ReadFile(secretsPath)
+        if err != nil {
+            log.Printf("error loading secrets file: %s; err: %s\nFalling back to env variables\n", secretsPath, err.Error())
+        }
+
+        cfg = app.NewConfigFromSecrets(data, Frontend, Migrations)
+    }
+
+    s3cfg, err := config.LoadDefaultConfig(context.Background(), config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.R2.Key, cfg.R2.Secret, "")), config.WithRegion("auto"))
 
     if err != nil {
         log.Fatal(err)
     }
 
     client := s3.NewFromConfig(s3cfg, func(o *s3.Options) {
-        o.BaseEndpoint = aws.String(os.Getenv("R2_URL"))
+        o.BaseEndpoint = aws.String(cfg.R2.Url)
     })
 
     res, err := client.GetObject(context.Background(), &s3.GetObjectInput{
@@ -48,7 +71,7 @@ func main() {
         log.Fatal(err)
     }
 
-    dbfile, err := os.Create(filepath.Join(cwd, os.Getenv("APP_DATA")))
+    dbfile, err := os.Create(filepath.Join(cwd, cfg.Data.Path))
     if err != nil {
         log.Fatal(err)
     }
@@ -83,7 +106,7 @@ func main() {
     <- done
 
     if strings.EqualFold(os.Getenv("APP_EXIT_BACKUP"), "1") {
-        dbfile, err := os.Open(filepath.Join(cwd, os.Getenv("APP_DATA")))
+        dbfile, err := os.Open(filepath.Join(cwd, cfg.Data.Path))
 
         if err != nil {
             log.Fatal(err)

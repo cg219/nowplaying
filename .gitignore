@@ -4,5 +4,6 @@
 **dist
 static-app
 **node_modules
+secrets.yml
 tmp
 data

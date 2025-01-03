@@ -1,0 +1,23 @@
+version: "3.7"
+
+services:
+  app:
+    image: nowplaying:latest
+    environment:
+      - APP_DATA=data/database.db
+      - NP_CREDTENTIALS=/run/secrets/npsecrets
+      - APP_EXIT_BACKUP=1
+      - PORT=8080
+    ports:
+      - 3006:8080
+    volumes:
+      - nowplaying-data:/app/data
+    secrets:
+      - npsecrets
+
+secrets:
+  npsecrets:
+    file: secrets.yml
+
+volumes:
+  nowplaying-data:

@@ -21,6 +21,7 @@ import (
 	"github.com/dghubble/oauth1"
 	"github.com/dghubble/oauth1/twitter"
 	"github.com/pressly/goose/v3"
+	"gopkg.in/yaml.v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -35,8 +36,8 @@ type Config struct {
         Token string `yaml:"token"`
     }
     Data struct {
-        Path string `yaml:"path"`
-    }
+        Path string `yaml:"data"`
+    } `yaml:"app"`
     Spotify struct {
         Id string `yaml:"id"`
         Secret string `yaml:"secret"`
@@ -46,11 +47,17 @@ type Config struct {
         Id string `yaml:"id"`
         Secret string `yaml:"secret"`
         Redirect string `yaml:"redirect"`
-    }
+    } `yaml:"twitter"`
     Discogs struct {
         Key string `yaml:"key"`
         Secret string `yaml:"secret"`
     } `json:"discogs"`
+    R2 struct {
+        Key string `yaml:"key"`
+        Secret string `yaml:"secret"`
+        Token string `yaml:"token"`
+        Url string `yaml:"url"`
+    } `yaml:"r2"`
     Frontend embed.FS
     Migrations embed.FS
 }
@@ -129,7 +136,24 @@ func NewConfig(frontend embed.FS, migrations embed.FS) *Config {
     cfg.Twitter.Redirect = os.Getenv("TWITTER_REDIRECT")
     cfg.Discogs.Key = os.Getenv("DISCOGS_KEY")
     cfg.Discogs.Secret = os.Getenv("DISCOGS_SECRET")
+    cfg.R2.Key = os.Getenv("R2_KEY")
+    cfg.R2.Secret = os.Getenv("R2_SECRET")
+    cfg.R2.Token = os.Getenv("R2_TOKEN")
+    cfg.R2.Url = os.Getenv("R2_URL")
     cfg.Data.Path = os.Getenv("APP_DATA")
+    cfg.Frontend = frontend
+    cfg.Migrations = migrations
+
+    return cfg
+}
+
+func NewConfigFromSecrets(data []byte, frontend embed.FS, migrations embed.FS) *Config {
+    cfg := &Config{}
+
+    if err := yaml.Unmarshal(data, cfg); err != nil {
+        log.Fatal("Error unmarshalling secrets file")
+    }
+
     cfg.Frontend = frontend
     cfg.Migrations = migrations
 
