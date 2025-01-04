@@ -8,7 +8,7 @@ WORKDIR /build
 COPY go.* ./
 RUN go mod download
 COPY . .
-RUN go build -o nowplaying nowplaying.go
+RUN go build -o nowplaying "nowplaying.go"
 RUN chmod +x /build/nowplaying
 
 FROM ubuntu:latest AS staging
