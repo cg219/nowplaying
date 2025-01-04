@@ -2,12 +2,13 @@ FROM golang:1.23 AS build
 ENV CGO_ENABLED=0
 ENV GOOS=linux
 ENV GOARCH=amd64
-
 RUN apt-get update && apt-get install -y gcc libc-dev
+RUN curl -fsSL https://deno.land/install.sh | sh
 WORKDIR /build
 COPY go.* ./
 RUN go mod download
 COPY . .
+RUN cd frontend && deno install && deno task build && cd ..
 RUN go build nowplaying.go
 RUN chmod +x /build/nowplaying
 
