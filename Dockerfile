@@ -8,7 +8,7 @@ WORKDIR /build
 COPY go.* ./
 RUN go mod download
 COPY . .
-RUN cd frontend && deno install && deno task build && cd ..
+RUN cd frontend && /root/.deno/bin/deno install && /root/.deno/bin/deno task build && cd ..
 RUN go build nowplaying.go
 RUN chmod +x /build/nowplaying
 
