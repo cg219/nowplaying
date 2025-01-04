@@ -35,7 +35,6 @@ jobs:
         id: push
         uses: docker/build-push-action@v6
         with:
-          context: .
           target: alpine
           push: true
           tags: cg219/nowplaying:latest
