@@ -1,7 +1,7 @@
 FROM golang:1.23 AS build
 ENV CGO_ENABLED=0
 ENV GOOS=linux
-ENV GOARCH=arm64
+ENV GOARCH=amd64
 
 RUN apt-get update && apt-get install -y gcc libc-dev
 WORKDIR /build
