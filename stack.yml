@@ -2,7 +2,7 @@ version: "3.7"
 
 services:
   app:
-    image: nowplaying:latest
+    image: ghcr.io/cg219/nowplaying:main
     environment:
       - APP_DATA=data/database.db
       - NP_CREDTENTIALS=/run/secrets/npsecrets
