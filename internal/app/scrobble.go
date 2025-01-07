@@ -103,6 +103,16 @@ func (s *Scrobbler) Scrobble(ctx context.Context, sc Scrobble) bool {
     dbValue, err := s.db.GetLatestTrack(ctx, int64(sc.Uid))
 
     if err == sql.ErrNoRows {
+        if sc.Duration > int(time.Duration(time.Second * 30).Milliseconds()) {
+            if sc.Progress < int(time.Duration(time.Second * 30).Milliseconds()) {
+                return false
+            }
+        } else {
+            if float64(sc.Progress) < math.Round(float64(sc.Duration) * .5) {
+                return false
+            }
+        }
+
         s.db.SaveScrobble(ctx, scrobbleToParams(sc))
         return false
     }

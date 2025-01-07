@@ -70,7 +70,13 @@ type AppCfg struct {
     database *database.Queries
     haveNewSessions bool
     subscribers map[int64]Subscriber
+    scrobbles chan ScrobblePack
     subMutex sync.RWMutex
+}
+
+type ScrobblePack struct {
+    Scrobble Scrobble
+    Username string
 }
 
 type Session interface {
@@ -268,6 +274,7 @@ func Run(config Config) error {
             Endpoint: twitter.AuthorizeEndpoint,
         },
         subscribers: make(map[int64]Subscriber), 
+        scrobbles: make(chan ScrobblePack, 100),
     }
 
     cwd, _ := os.Getwd();
@@ -297,30 +304,41 @@ func Run(config Config) error {
     done := make(chan struct{})
     run := make(chan struct{})
 
-    loop := func() {
-        log.Println("running AppLoop()")
-        restart := AppLoop(cfg)
-
-        if !restart {
-            close(done)
-        } else {
-            run <- struct{}{}
-        }
-    }
-
-    go loop()
+    // loop := func() {
+    //     log.Println("running AppLoop()")
+    //     restart := AppLoop(cfg)
+    //
+    //     if !restart {
+    //         close(done)
+    //     } else {
+    //         run <- struct{}{}
+    //     }
+    // }
+    //
+    // go loop()
 
     for {
         select {
+        case pack := <- cfg.scrobbles:
+            scrobble := pack.Scrobble
+            username := pack.Username
+            user, _ := cfg.database.GetUser(context.Background(), username)
+            scrobbler := NewScrobbler(username, cfg.database)
+            scrobble.Uid = int(user.ID)
+
+            if ok := scrobbler.Scrobble(context.Background(), scrobble); ok {
+                log.Printf("SCROBBLED: %s - %s\n", scrobble.ArtistName, scrobble.TrackName)
+                cfg.Notify(scrobble, username)
+            }
         case <- ctx.Done():
-            log.Println("terminating AppLoop()")
+            log.Println("terminating Run()")
             return nil
         case <-done:
             log.Println("AppLoop() complete")
             return nil
         case <-run:
             log.Println("restart AppLoop()")
-            go loop()
+            // go loop()
         }
     }
 }

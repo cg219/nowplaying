@@ -87,6 +87,58 @@ func (s *Server) NotifyScrobble(w http.ResponseWriter, r *http.Request) error {
     }
 }
 
+func (s *Server) ScrobbleSong(w http.ResponseWriter,r *http.Request) error {
+    type Body struct {
+        Name string `json:"name"`
+        Artist string `json:"artist"`
+        Album string `json:"album"`
+        Timestamp string `json:"timestamp"`
+        Progress string `json:"progress"`
+        Duration string `json:"duration"`
+        Client string `json:"client"`
+    }
+
+    defer r.Body.Close()
+    data := SuccessResp{ Success: true }
+
+    encode(w, 200, data)
+
+    res, err := decode[Body](r)
+    if err != nil {
+        s.log.Error("json decoding", "err", err.Error())
+    }
+
+    timestamp, err := time.Parse(time.RFC3339, res.Timestamp)
+    if err != nil {
+        s.log.Error("parsing time", "err", err.Error())
+    }
+
+    duration, err := stringToDuration(res.Duration)
+    if err != nil {
+        s.log.Error("parsing time", "err", err.Error())
+    }
+
+    progress, err := stringToDuration(res.Progress)
+    if err != nil {
+        s.log.Error("parsing time", "err", err.Error())
+    }
+
+    scrobble := Scrobble{
+        ArtistName: res.Artist,
+        TrackName: res.Name,
+        AlbumName: res.Album,
+        AlbumArtist: res.Artist,
+        Duration: int(duration.Milliseconds()),
+        Progress: int(progress.Milliseconds()),
+        Timestamp: int(timestamp.UnixMilli()),
+        Source: strings.ToLower(res.Client),
+        TrackNumber: "0",
+    }
+
+    s.authCfg.scrobbles <- ScrobblePack{ Scrobble: scrobble, Username: r.Header.Get("X-Username")}
+    return nil
+}
+
 func (s *Server) ResetPassword(w http.ResponseWriter, r *http.Request) error {
     resettimer := time.Now().Unix()
     type Body struct {

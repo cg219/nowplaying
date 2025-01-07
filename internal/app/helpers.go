@@ -7,6 +7,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,6 +20,25 @@ type SongMetadata struct {
 
 func return500(w http.ResponseWriter) {
     encode(w, 500, ResponseError{ Success: false, Messaage: INTERNAL_ERROR, Code: INTERNAL_SERVER_ERROR })
+}
+
+func stringToDuration(ts string) (time.Duration, error) {
+    secs := strings.Split(ts, ":")
+    if len(secs) != 3 {
+        return 0, fmt.Errorf("Invalid time string: %s", ts)
+    }
+
+    h, errh := strconv.Atoi(secs[0])
+    m, errm := strconv.Atoi(secs[1])
+    s, errs := strconv.Atoi(secs[2])
+
+    if errh != nil || errm != nil || errs != nil {
+        return 0, fmt.Errorf("Unable to parse time string: %s", ts)
+    }
+
+    d := (time.Duration(h) * time.Hour) + (time.Duration(m) * time.Minute) + (time.Duration(s) * time.Second)
+
+    return d, nil
 }
 
 func encode[T any](w http.ResponseWriter, status int, v T) error {

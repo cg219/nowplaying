@@ -1,0 +1,11 @@
+{{#if_equals IsPaused "False"}}
+{
+    "name": "{{Name}}",
+    "artist": "{{Artist}}",
+    "album": "{{Album}}",
+    "timestamp": "{{UtcTimestamp}}",
+    "progress": "{{PlaybackPosition}}",
+    "duration": "{{RunTime}}",
+    "client": "{{ClientName}}"
+}
+{{/if_equals}}

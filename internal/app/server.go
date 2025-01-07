@@ -98,6 +98,7 @@ func addRoutes(srv *Server) {
     srv.mux.Handle("POST /api/login", srv.handle(srv.LogUserIn))
     srv.mux.Handle("POST /api/logout", srv.handle(srv.UserOnly, srv.LogUserOut))
     srv.mux.Handle("POST /api/settings", srv.handle(srv.UserOnly, srv.GetSettingsData))
+    srv.mux.Handle("POST /api/scrobble", srv.handle(srv.ScrobbleSong))
     srv.mux.Handle("GET /api/last-scrobble", srv.handle(srv.UserOnly, srv.GetLastScrobble))
     srv.mux.Handle("GET /api/events/scrobble", srv.handle(srv.UserOnly, srv.NotifyScrobble))
     srv.mux.Handle("POST /api/me", srv.handle(srv.UserOnly, srv.GetUserData))
