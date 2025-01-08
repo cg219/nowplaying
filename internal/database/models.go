@@ -8,6 +8,12 @@ import (
 	"database/sql"
 )
 
+type Apikey struct {
+	Key  string
+	Name string
+	Uid  sql.NullInt64
+}
+
 type HistorySpotify struct {
 	ID         int64
 	ArtistName string

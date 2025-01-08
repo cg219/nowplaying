@@ -13,6 +13,9 @@
         subtitle: string
     }
 
+    let apikey = $state("")
+    let apiname = $state("")
+
     async function getData() {
         console.log("dataaa")
         const res = await fetch("/api/settings", {
@@ -53,6 +56,12 @@
             body: data
         })
     }
+
+    async function generateKey() {
+        const res = await fetch(`/api/generate-apikey/${apiname}`, { method: "POST" }).then((res) => res.json())
+
+        apikey = res.apikey
+    }
 </script>
 
 {#await getData()}
@@ -88,7 +97,12 @@
                     </a>
                 </fieldset>
             {/if}
-
+            <fieldset>
+                <label for="new-key">New API Key</label>
+                <input type="text" placeholder="Name" bind:value={apiname}>
+                <input type="button" onclick={generateKey} name="api-generate" value="Generate">
+                <input type="text" name="new-key" disabled value={apikey}>
+            </fieldset>
         </form>
     </Layout>
 {/await}

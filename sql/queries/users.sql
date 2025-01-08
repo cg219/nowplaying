@@ -29,3 +29,26 @@ WHERE reset = ? AND reset_time > ?;
 SELECT reset_time > ? AS valid, username
 FROM users
 WHERE reset = ?;
+
+-- name: SaveApiKey :exec
+INSERT INTO apikeys(name, key, uid)
+VALUES(?, ?, ?);
+
+-- name: GetApiKeysForUid :many
+SELECT key, name
+FROM apikeys
+WHERE uid = ?;
+
+-- name: CheckValidApiKey :one
+SELECT EXISTS (
+    SELECT 1
+    FROM apikeys
+    WHERE key = ?
+) as valid;
+
+-- name: GetUserFromApiKey :one
+SELECT username
+FROM users
+JOIN apikeys
+ON users.id = apikeys.uid
+WHERE apikeys.key = ?;

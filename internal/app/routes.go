@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	_ "net/http/pprof"
 	"strings"
@@ -88,6 +89,8 @@ func (s *Server) NotifyScrobble(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) ScrobbleSong(w http.ResponseWriter,r *http.Request) error {
+    username := r.Context().Value("username").(string)
+
     type Body struct {
         Name string `json:"name"`
         Artist string `json:"artist"`
@@ -135,7 +138,39 @@ func (s *Server) ScrobbleSong(w http.ResponseWriter,r *http.Request) error {
         TrackNumber: "0",
     }
 
-    s.authCfg.scrobbles <- ScrobblePack{ Scrobble: scrobble, Username: r.Header.Get("X-Username")}
+    s.authCfg.scrobbles <- ScrobblePack{ Scrobble: scrobble, Username: username }
+    return nil
+}
+
+func (s *Server) GenerateAPIKey(w http.ResponseWriter, r *http.Request) error {
+    username := r.Context().Value("username")
+    user, _ := s.authCfg.database.GetUser(r.Context(), username.(string))
+
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    key := make([]byte, 24)
+
+    for i := range key {
+        n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+        if err != nil {
+            s.log.Error("generating api key", "err", err)
+            return fmt.Errorf(INTERNAL_ERROR)
+        }
+
+        key[i] = charset[n.Int64()]
+    }
+
+    s.authCfg.database.SaveApiKey(r.Context(), database.SaveApiKeyParams{
+        Key: string(key),
+        Uid: sql.NullInt64{ Valid: true, Int64: user.ID },
+        Name: r.PathValue("name"),
+    })
+
+    type KeyResp struct {
+        Key string `json:"apikey"`
+    }
+
+    resp := KeyResp{ Key: string(key) }
+    encode(w, http.StatusOK, resp)
     return nil
 }
 

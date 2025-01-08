@@ -33,6 +33,55 @@ func (q *Queries) CanResetPassword(ctx context.Context, arg CanResetPasswordPara
 	return i, err
 }
 
+const checkValidApiKey = `-- name: CheckValidApiKey :one
+SELECT EXISTS (
+    SELECT 1
+    FROM apikeys
+    WHERE key = ?
+) as valid
+`
+
+func (q *Queries) CheckValidApiKey(ctx context.Context, key string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, checkValidApiKey, key)
+	var valid int64
+	err := row.Scan(&valid)
+	return valid, err
+}
+
+const getApiKeysForUid = `-- name: GetApiKeysForUid :many
+SELECT key, name
+FROM apikeys
+WHERE uid = ?
+`
+
+type GetApiKeysForUidRow struct {
+	Key  string
+	Name string
+}
+
+func (q *Queries) GetApiKeysForUid(ctx context.Context, uid sql.NullInt64) ([]GetApiKeysForUidRow, error) {
+	rows, err := q.db.QueryContext(ctx, getApiKeysForUid, uid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetApiKeysForUidRow
+	for rows.Next() {
+		var i GetApiKeysForUidRow
+		if err := rows.Scan(&i.Key, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUser = `-- name: GetUser :one
 SELECT id, username
 FROM users
@@ -49,6 +98,21 @@ func (q *Queries) GetUser(ctx context.Context, username string) (GetUserRow, err
 	var i GetUserRow
 	err := row.Scan(&i.ID, &i.Username)
 	return i, err
+}
+
+const getUserFromApiKey = `-- name: GetUserFromApiKey :one
+SELECT username
+FROM users
+JOIN apikeys
+ON users.id = apikeys.uid
+WHERE apikeys.key = ?
+`
+
+func (q *Queries) GetUserFromApiKey(ctx context.Context, key string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getUserFromApiKey, key)
+	var username string
+	err := row.Scan(&username)
+	return username, err
 }
 
 const getUserWithPassword = `-- name: GetUserWithPassword :one
@@ -85,6 +149,22 @@ type ResetPasswordParams struct {
 
 func (q *Queries) ResetPassword(ctx context.Context, arg ResetPasswordParams) error {
 	_, err := q.db.ExecContext(ctx, resetPassword, arg.Password, arg.Reset, arg.ResetTime)
+	return err
+}
+
+const saveApiKey = `-- name: SaveApiKey :exec
+INSERT INTO apikeys(name, key, uid)
+VALUES(?, ?, ?)
+`
+
+type SaveApiKeyParams struct {
+	Name string
+	Key  string
+	Uid  sql.NullInt64
+}
+
+func (q *Queries) SaveApiKey(ctx context.Context, arg SaveApiKeyParams) error {
+	_, err := q.db.ExecContext(ctx, saveApiKey, arg.Name, arg.Key, arg.Uid)
 	return err
 }
 

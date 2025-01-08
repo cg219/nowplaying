@@ -1,12 +1,13 @@
 package app
 
 import (
-    "encoding/base64"
-    "encoding/json"
-    "fmt"
-    "net/http"
-    _ "net/http/pprof"
-    "github.com/cg219/nowplaying/pkg/webtoken"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	_ "net/http/pprof"
+
+	"github.com/cg219/nowplaying/pkg/webtoken"
 )
 
 func (s *Server) handle(h ...CandlerFunc) http.Handler {
@@ -126,37 +127,48 @@ func (s *Server) RedirectAuthenticated(redirect string, onAuth bool) CandlerFunc
 func (s *Server) UserOnly(w http.ResponseWriter, r *http.Request) error {
     cookie, err := r.Cookie("nowplaying")
     if err != nil {
+        if apikey := r.Header.Get("np-apikey"); apikey != "" {
+            username, err := s.authCfg.database.GetUserFromApiKey(r.Context(), apikey)
+            if err != nil {
+                s.log.Error("Invalid API Key", "key", apikey, "method", "UserOnly", "request", r, "error", err.Error())
+                return fmt.Errorf(AUTH_ERROR)
+            }
+
+            s.authenticateRequest(r, username)
+            return nil
+        }
+
         s.log.Error("Cookie Retrieval", "cookie", "nowplaying", "method", "UserOnly", "request", r, "error", err.Error())
         return fmt.Errorf(AUTH_ERROR)
-    }
+    } else {
+        value, err := base64.StdEncoding.DecodeString(cookie.Value)
+        if err != nil {
+            s.log.Error("Base64 Decoding", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
+            return fmt.Errorf(AUTH_ERROR)
+        }
 
-    value, err := base64.StdEncoding.DecodeString(cookie.Value)
-    if err != nil {
-        s.log.Error("Base64 Decoding", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
-        return fmt.Errorf(AUTH_ERROR)
-    }
+        var cookieValue webtoken.CookieAuthValue
+        err = json.Unmarshal(value, &cookieValue)
+        if err != nil {
+            s.log.Error("Invalid Cookie Value", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
+            return fmt.Errorf(AUTH_ERROR)
+        }
 
-    var cookieValue webtoken.CookieAuthValue
-    err = json.Unmarshal(value, &cookieValue)
-    if err != nil {
-        s.log.Error("Invalid Cookie Value", "cookie", cookie.Value, "method", "UserOnly", "request", r, "error", err.Error())
-        return fmt.Errorf(AUTH_ERROR)
-    }
+        ok, username, refresh, ctx := s.isAuthenticated(r.Context(), cookieValue.AccessToken, cookieValue.RefreshToken)
+        if ok {
+            updatedRequest := r.WithContext(ctx)
+            *r = *updatedRequest
+            s.authenticateRequest(r, username)
+            return nil
+        }
 
-    ok, username, refresh, ctx := s.isAuthenticated(r.Context(), cookieValue.AccessToken, cookieValue.RefreshToken)
-    if ok {
-        updatedRequest := r.WithContext(ctx)
-        *r = *updatedRequest
-        s.authenticateRequest(r, username)
-        return nil
-    }
-
-    if !ok && refresh != nil {
-        ctx = refresh(w)
-        updatedRequest := r.WithContext(ctx)
-        *r = *updatedRequest
-        s.authenticateRequest(r, username)
-        return nil
+        if !ok && refresh != nil {
+            ctx = refresh(w)
+            updatedRequest := r.WithContext(ctx)
+            *r = *updatedRequest
+            s.authenticateRequest(r, username)
+            return nil
+        }
     }
 
     return fmt.Errorf(AUTH_ERROR)
