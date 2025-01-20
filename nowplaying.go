@@ -1,16 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"embed"
-	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -105,44 +101,44 @@ func main() {
 
     <- done
 
-    if strings.EqualFold(os.Getenv("APP_EXIT_BACKUP"), "1") {
-        dbfile, err := os.Open(filepath.Join(cwd, cfg.Data.Path))
-
-        if err != nil {
-            log.Fatal(err)
-        }
-
-        var latest bytes.Buffer
-
-        tee := io.TeeReader(dbfile, &latest)
-        dbbuf := new(bytes.Buffer)
-        io.Copy(dbbuf, tee)
-        timestamped := bytes.NewReader(dbbuf.Bytes())
-        bckup := bytes.NewReader(latest.Bytes())
-
-        timestamp := time.Now()
-        log.Println("Saving database to R2")
-
-        _, err = client.PutObject(context.Background(), &s3.PutObjectInput{
-            Bucket: aws.String("nowplaying"),
-            Key: aws.String(fmt.Sprintf("%d-database.db", timestamp.UnixMilli())),
-            Body: timestamped,
-        })
-
-        if err != nil {
-            log.Fatal(err.Error())
-        }
-
-        _, err = client.PutObject(context.Background(), &s3.PutObjectInput{
-            Bucket: aws.String("nowplaying"),
-            Key: aws.String("database.db"),
-            Body: bckup,
-        })
-
-        if err != nil {
-            log.Fatal(err.Error())
-        }
-    }
-
+    // if strings.EqualFold(os.Getenv("APP_EXIT_BACKUP"), "1") {
+    //     dbfile, err := os.Open(filepath.Join(cwd, cfg.Data.Path))
+    //
+    //     if err != nil {
+    //         log.Fatal(err)
+    //     }
+    //
+    //     var latest bytes.Buffer
+    //
+    //     tee := io.TeeReader(dbfile, &latest)
+    //     dbbuf := new(bytes.Buffer)
+    //     io.Copy(dbbuf, tee)
+    //     timestamped := bytes.NewReader(dbbuf.Bytes())
+    //     bckup := bytes.NewReader(latest.Bytes())
+    //
+    //     timestamp := time.Now()
+    //     log.Println("Saving database to R2")
+    //
+    //     _, err = client.PutObject(context.Background(), &s3.PutObjectInput{
+    //         Bucket: aws.String("nowplaying"),
+    //         Key: aws.String(fmt.Sprintf("%d-database.db", timestamp.UnixMilli())),
+    //         Body: timestamped,
+    //     })
+    //
+    //     if err != nil {
+    //         log.Fatal(err.Error())
+    //     }
+    //
+    //     _, err = client.PutObject(context.Background(), &s3.PutObjectInput{
+    //         Bucket: aws.String("nowplaying"),
+    //         Key: aws.String("database.db"),
+    //         Body: bckup,
+    //     })
+    //
+    //     if err != nil {
+    //         log.Fatal(err.Error())
+    //     }
+    // }
+    //
     log.Println("Exiting nowplaying safely")
 }

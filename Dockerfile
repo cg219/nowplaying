@@ -11,6 +11,8 @@ COPY . .
 RUN cd frontend && /root/.deno/bin/deno install && /root/.deno/bin/deno task build && cd ..
 RUN go build nowplaying.go
 RUN chmod +x /build/nowplaying
+RUN go build -o backup cmd/backup/main.go
+RUN chmod +x /build/backup
 
 FROM ubuntu:latest AS staging
 RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
@@ -20,8 +22,16 @@ RUN chmod +x /usr/local/bin/nowplaying
 EXPOSE 8080
 ENTRYPOINT [ "/usr/local/bin/nowplaying" ]
 
+FROM ubuntu:latest AS backup
+RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
+COPY --from=build /build/backup /usr/local/bin/backup
+COPY --from=build /build/.env /usr/local/bin/.env
+RUN chmod +x /usr/local/bin/backup
+ENTRYPOINT [ "/usr/local/bin/backup" ]
+
 FROM alpine:latest AS alpine
 WORKDIR /app
 COPY --from=build /build/nowplaying /app
+COPY --from=build /build/backup /app
 EXPOSE 8080
 ENTRYPOINT [ "/app/nowplaying" ]

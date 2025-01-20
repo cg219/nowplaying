@@ -14,6 +14,22 @@ services:
       - nowplaying-data:/app/data
     secrets:
       - npsecrets
+  backup:
+    image: ghcr.io/cg219/nowplaying:main
+    environment:
+      - APP_DATA=data/database.db
+      - NP_CREDTENTIALS=/run/secrets/npsecrets
+      - APP_EXIT_BACKUP=1
+      - PORT=8081
+    command: /usr/local/bin/backup
+    volumes:
+      - nowplaying-data:/app/data
+    secrets:
+      - npsecrets
+    depends_on:
+      app:
+        condition: service_started
+        restart: true
 
 secrets:
   npsecrets:
