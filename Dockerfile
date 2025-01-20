@@ -11,7 +11,7 @@ COPY . .
 RUN cd frontend && /root/.deno/bin/deno install && /root/.deno/bin/deno task build && cd ..
 RUN go build nowplaying.go
 RUN chmod +x /build/nowplaying
-RUN go build -o backup cmd/backup/main.go
+RUN go build -o /build/backup cmd/backup/main.go
 RUN chmod +x /build/backup
 
 FROM ubuntu:latest AS staging
