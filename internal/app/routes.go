@@ -751,14 +751,9 @@ func (s *Server) GetResetPasswordData(w http.ResponseWriter, r *http.Request) er
     return nil
 }
 
-func (s *Server) Test(w http.ResponseWriter, r *http.Request) error {
-    type TestResp struct {
-        SuccessResp
-        Value string `json:"value"`
-    }
+func (s *Server) HealthCheck(w http.ResponseWriter, r *http.Request) error {
+    resp := SuccessResp{ Success: true }
 
-    resp := TestResp{ Value: r.Context().Value("username").(string)}
-    resp.Success = true
     encode(w, http.StatusOK, resp)
     return nil
 }

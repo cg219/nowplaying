@@ -34,4 +34,4 @@ WORKDIR /app
 COPY --from=build /build/nowplaying /app
 COPY --from=build /build/backup /app
 EXPOSE 8080
-ENTRYPOINT [ "/app/nowplaying" ]
+CMD [ "/app/nowplaying" ]

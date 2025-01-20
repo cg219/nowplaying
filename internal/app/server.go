@@ -119,7 +119,7 @@ func addRoutes(srv *Server) {
     srv.mux.Handle("POST /auth/register", srv.handle(srv.Register))
     srv.mux.Handle("POST /auth/login", srv.handle(srv.Login))
     srv.mux.Handle("POST /auth/logout", srv.handle(srv.UserOnly, srv.Logout))
-    srv.mux.Handle("GET /test/x", srv.handle(srv.UserOnly, srv.Test))
+    srv.mux.Handle("GET /healthcheck", srv.handle(srv.HealthCheck))
     srv.mux.Handle("GET /me", srv.handle(srv.RedirectAuthenticated("/", false), srv.getUserPage))
     srv.mux.Handle("GET /settings", srv.handle(srv.RedirectAuthenticated("/", false), srv.getSettingsPage))
     srv.mux.Handle("GET /reset/{resetvalue}", srv.handle(srv.getResetPage))

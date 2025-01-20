@@ -14,6 +14,16 @@ services:
       - nowplaying-data:/app/data
     secrets:
       - npsecrets
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthcheck"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    deploy:
+      stop_grace_period: 10s
+      restart_policy:
+        condition: on-failure
   backup:
     image: ghcr.io/cg219/nowplaying:main
     environment:
@@ -21,15 +31,15 @@ services:
       - NP_CREDTENTIALS=/run/secrets/npsecrets
       - APP_EXIT_BACKUP=1
       - PORT=8081
-    command: /usr/local/bin/backup
+    command: ["/bin/sh", "-c", "while ! wget --spider -q http://app:8080/health; do sleep 2; done; /usr/local/bin/backup"]
     volumes:
       - nowplaying-data:/app/data
     secrets:
       - npsecrets
-    depends_on:
-      app:
-        condition: service_started
-        restart: true
+    deploy:
+      stop_grace_period: 20s
+      restart_policy:
+        condition: on-failure
 
 secrets:
   npsecrets:
